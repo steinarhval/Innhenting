@@ -37,6 +37,20 @@
     background-color: #c62828;
     color: white;
   }
+#msg {
+  margin-top: 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.msg-waiting {
+  color: #1565c0; /* blå */
+}
+
+.msg-done {
+  color: #2e7d32; /* grønn */
+}
+
 
   button:active {
     transform: scale(0.98);
@@ -52,7 +66,7 @@
 <button class="yellow" onclick="vote('B')">Nøytral</button><br>
 <button class="red" onclick="vote('C')">Risiko</button>
 
-<p id="msg"></p>
+<p id="msg" class="msg-waiting">Venter på svar når du er klar.</p>
 
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -69,13 +83,39 @@
   const pollRef = db.collection("polls").doc("livePoll");
 
   function vote(option) {
-    pollRef.update({
-      [option]: firebase.firestore.FieldValue.increment(1)
-    });
+  pollRef.update({
+    [option]: firebase.firestore.FieldValue.increment(1)
+  });
 
-    document.getElementById("msg").textContent =
-      "Takk for stemmen!";
+  const msg = document.getElementById("msg");
+  msg.textContent = "Takk, svaret er avgitt!";
+  msg.classList.remove("msg-waiting");
+  msg.classList.add("msg-done");
+
+  document.querySelectorAll("button").forEach(btn => {
+    btn.disabled = true;
+    btn.style.opacity = 0.6;
+  });
+}
+pollRef.onSnapshot(doc => {
+  const d = doc.data();
+  const total = (d.A || 0) + (d.B || 0) + (d.C || 0);
+
+  // Ny runde: alle verdier er null
+  if (total === 0) {
+    const msg = document.getElementById("msg");
+
+    msg.textContent = "Venter på svar når du er klar.";
+    msg.classList.remove("msg-done");
+    msg.classList.add("msg-waiting");
+
+    document.querySelectorAll("button").forEach(btn => {
+      btn.disabled = false;
+      btn.style.opacity = 1;
+    });
   }
+});
+
 </script>
 
 </body>
