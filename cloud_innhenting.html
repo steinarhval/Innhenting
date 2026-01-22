@@ -210,7 +210,26 @@
           // Vi kan også lagre "label" hvis vi vil, men for enkelhet bruker vi nøkkelen som visning.
         });
 
-        await pollRef.set(updateObj, { merge: true });
+await db.runTransaction(async (tx) => {
+  const snap = await tx.get(pollRef);
+
+  // Sørg for at words-map finnes
+  if (!snap.exists || !snap.data().words) {
+    tx.set(pollRef, { words: {}, total: 0 }, { merge: true });
+  }
+
+  const inc = {
+    total: firebase.firestore.FieldValue.increment(words.length)
+  };
+
+  words.forEach(w => {
+    const key = safeFieldKey(w);
+    inc[`words.${key}`] = firebase.firestore.FieldValue.increment(1);
+  });
+
+  tx.set(pollRef, inc, { merge: true });
+});
+
 
         setMsg("Takk, svaret er avgitt!", "msg-done");
       } catch (err) {
@@ -251,3 +270,4 @@
   </script>
 </body>
 </html>
+
