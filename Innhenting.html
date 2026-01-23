@@ -4,69 +4,108 @@
   <meta charset="UTF-8">
   <title>Stem her</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
- <style>
-  body {
-    font-family: system-ui, sans-serif;
-    text-align: center;
-    padding: 2rem;
-  }
 
-  button {
-    font-size: 1.5rem;
-    padding: 1.2rem 2rem;
-    margin: 1rem;
-    width: 80%;
-    max-width: 300px;
-    border: none;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-  }
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      text-align: center;
+      padding: 2rem;
+    }
 
-  .green {
-    background-color: #2e7d32;
-    color: white;
-  }
+    h1 {
+      margin-bottom: 1.5rem;
+    }
 
-  .yellow {
-    background-color: #f9a825;
-    color: #222;
-  }
+    button {
+      font-size: 1.4rem;
+      padding: 1.2rem 2rem;
+      margin: 1rem;
+      width: 80%;
+      max-width: 320px;
 
-  .red {
-    background-color: #c62828;
-    color: white;
-  }
-#msg {
-  margin-top: 2rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      cursor: pointer;
 
-.msg-waiting {
-  color: #1565c0; /* blå */
-}
+      /* VIKTIG: eksplisitt bakgrunn */
+      background: #f3f3f3;
 
-.msg-done {
-  color: #2e7d32; /* grønn */
-}
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
 
+    button:hover {
+      background-color: #e0e0e0;
+    }
 
-  button:active {
-    transform: scale(0.98);
-  }
-</style>
+    button:active {
+      transform: translateY(1px);
+    }
 
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+      transform: none;
+    }
+
+    .green  { background:#2e7d32; color:white; }
+    .yellow { background:#f9a825; color:#222; }
+    .red    { background:#c62828; color:white; }
+
+    .green:hover  { background:#256a2a; }
+    .yellow:hover { background:#e0a71f; }
+    .red:hover    { background:#a61f1f; }
+
+    .hidden {
+      display: none;
+    }
+
+    #msg {
+      margin-top: 2rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .waiting {
+      color:#1565c0;
+    }
+
+    .done {
+      color:#2e7d32;
+    }
+  </style>
 </head>
+
 <body>
 
-<h1>Velg svar</h1>
+<h1 id="title">Vent litt …</h1>
 
-<button class="green" onclick="vote('A')">Beskyttende</button><br>
-<button class="yellow" onclick="vote('B')">Nøytral</button><br>
-<button class="red" onclick="vote('C')">Risiko</button>
+<!-- Ventemelding -->
+<div id="waitingBox" class="waiting">
+  Foreleser starter snart 🙂
+</div>
 
-<p id="msg" class="msg-waiting">Venter på svar når du er klar.</p>
+<!-- SBS -->
+<div id="sbsBox" class="hidden">
+  <button class="green"  onclick="vote('A')">Sunn</button><br>
+  <button class="yellow" onclick="vote('B')">Bekymringsfull</button><br>
+  <button class="red"    onclick="vote('C')">Skadelig</button>
+</div>
+
+<!-- BNR -->
+<div id="bnrBox" class="hidden">
+  <button class="green"  onclick="vote('A')">Beskyttende</button><br>
+  <button class="yellow" onclick="vote('B')">Nøytral</button><br>
+  <button class="red"    onclick="vote('C')">Risiko</button>
+</div>
+
+<!-- JA / NEI -->
+<div id="jnBox" class="hidden">
+  <button class="green" onclick="vote('A')">Ja</button><br>
+  <button class="red"   onclick="vote('B')">Nei</button>
+</div>
+
+<p id="msg" class="waiting"></p>
 
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -78,44 +117,104 @@
     projectId: "profesor-7e112",
   };
 
-  firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  const pollRef = db.collection("polls").doc("livePoll");
 
-  function vote(option) {
-  pollRef.update({
-    [option]: firebase.firestore.FieldValue.increment(1)
+  const pollRef  = db.collection("polls").doc("livePoll");
+  const stateRef = db.collection("app").doc("state");
+
+  let hasVoted = false;
+  let mode  = null;
+  let round = null;
+
+  stateRef.onSnapshot(doc => {
+    if (!doc.exists) return;
+
+    const newMode  = doc.data().mode  ?? null;
+    const newRound = doc.data().round ?? null;
+
+    if (newMode !== mode || newRound !== round) {
+      mode  = newMode;
+      round = newRound;
+
+      hasVoted = false;
+      enableAllButtons();
+      showWaitingMessage();
+      render();
+    }
   });
 
-  const msg = document.getElementById("msg");
-  msg.textContent = "Takk, svaret er avgitt!";
-  msg.classList.remove("msg-waiting");
-  msg.classList.add("msg-done");
+  function render() {
+    hideAll();
 
-  document.querySelectorAll("button").forEach(btn => {
-    btn.disabled = true;
-    btn.style.opacity = 0.6;
-  });
-}
-pollRef.onSnapshot(doc => {
-  const d = doc.data();
-  const total = (d.A || 0) + (d.B || 0) + (d.C || 0);
+    if (!mode) {
+      setTitle("Vent litt …");
+      show("waitingBox");
+      return;
+    }
 
-  // Ny runde: alle verdier er null
-  if (total === 0) {
-    const msg = document.getElementById("msg");
+    setTitle("Velg svar");
 
-    msg.textContent = "Venter på svar når du er klar.";
-    msg.classList.remove("msg-done");
-    msg.classList.add("msg-waiting");
+    if (mode === "sbs")   { show("sbsBox"); return; }
+    if (mode === "bnr")   { show("bnrBox"); return; }
+    if (mode === "yesno") { show("jnBox");  return; }
 
-    document.querySelectorAll("button").forEach(btn => {
-      btn.disabled = false;
-      btn.style.opacity = 1;
-    });
+    show("waitingBox");
   }
-});
 
+  async function vote(option) {
+    if (hasVoted) return;
+
+    try {
+      await pollRef.set(
+        { [option]: firebase.firestore.FieldValue.increment(1) },
+        { merge: true }
+      );
+
+      hasVoted = true;
+      document.getElementById("msg").textContent = "Takk, svaret er avgitt!";
+      document.getElementById("msg").className = "done";
+      disableAllButtons();
+
+    } catch (err) {
+      document.getElementById("msg").textContent =
+        "Noe gikk galt – prøv igjen";
+      document.getElementById("msg").className = "waiting";
+    }
+  }
+
+  function showWaitingMessage() {
+    const msg = document.getElementById("msg");
+    msg.textContent = "Venter på svar …";
+    msg.className = "waiting";
+  }
+
+  function hideAll() {
+    hide("waitingBox");
+    hide("sbsBox");
+    hide("bnrBox");
+    hide("jnBox");
+  }
+
+  function disableAllButtons() {
+    document.querySelectorAll("button").forEach(b => b.disabled = true);
+  }
+
+  function enableAllButtons() {
+    document.querySelectorAll("button").forEach(b => b.disabled = false);
+  }
+
+  function show(id) {
+    document.getElementById(id).style.display = "block";
+  }
+
+  function hide(id) {
+    document.getElementById(id).style.display = "none";
+  }
+
+  function setTitle(text) {
+    document.getElementById("title").textContent = text;
+  }
 </script>
 
 </body>
