@@ -1,221 +1,309 @@
 <!DOCTYPE html>
 <html lang="no">
 <head>
-  <meta charset="UTF-8">
-  <title>Stem her</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>Avstemning</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
     body {
       font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 2rem 1.5rem;
       text-align: center;
-      padding: 2rem;
     }
 
-    h1 {
-      margin-bottom: 1.5rem;
+    h1 { margin-bottom: 0.8rem; }
+
+    .hidden { display: none; }
+
+    #waitingBox {
+      margin-top: 1.2rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #00416a;
     }
 
-    button {
-      font-size: 1.4rem;
-      padding: 1.2rem 2rem;
-      margin: 1rem;
-      width: 80%;
-      max-width: 320px;
+    #msg {
+      margin-top: 1.4rem;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #00416a;
+      min-height: 1.4em; /* så layout ikke hopper */
+    }
+
+    /* ============ Standard-knapper (SBS/BNR/YESNO) ============ */
+    button.choice {
+      font-size: 1.35rem;
+      padding: 1.1rem 2rem;
+      margin: 0.7rem 0;
+      width: 85%;
+      max-width: 360px;
 
       border: none;
       border-radius: 10px;
-      font-weight: 600;
+      font-weight: 800;
       cursor: pointer;
 
-      /* VIKTIG: eksplisitt bakgrunn */
-      background: #f3f3f3;
-
-      transition: background-color 0.15s ease, transform 0.1s ease;
+      transition: filter 0.15s ease, transform 0.1s ease;
     }
 
-    button:hover {
-      background-color: #e0e0e0;
-    }
+    button.choice:hover { filter: brightness(1.06); }
+    button.choice:active { transform: translateY(1px); }
 
-    button:active {
-      transform: translateY(1px);
-    }
-
-    button:disabled {
-      opacity: 0.6;
+    button.choice:disabled {
+      opacity: 0.65;
       cursor: default;
       transform: none;
+      filter: none;
     }
 
     .green  { background:#2e7d32; color:white; }
     .yellow { background:#f9a825; color:#222; }
     .red    { background:#c62828; color:white; }
 
-    .green:hover  { background:#256a2a; }
-    .yellow:hover { background:#e0a71f; }
-    .red:hover    { background:#a61f1f; }
+    /* =======================
+       LIKERT – ÉN KOLONNE, 10→0
+       ======================= */
 
-    .hidden {
-      display: none;
+    .likert-wrap { margin-top: 1.2rem; }
+
+    .likert-scale-label {
+      font-weight: 700;
+      opacity: 0.8;
+      margin-bottom: 0.6rem;
     }
 
-    #msg {
-      margin-top: 2rem;
-      font-size: 1.1rem;
-      font-weight: 600;
+    .likert-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      max-width: 220px;
+      margin: 0 auto;
     }
 
-    .waiting {
-      color:#1565c0;
+    .likert-btn {
+      padding: 0.45rem 0;
+      font-size: 1.05rem;
+      font-weight: 900;
+      border-radius: 10px;
+      border: none;
+      background: #f2f2f2;
+      cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.08s ease;
     }
 
-    .done {
-      color:#2e7d32;
+    .likert-btn:hover { background: #e4e4e4; }
+    .likert-btn:active { transform: translateY(1px); }
+
+    .likert-btn.selected {
+      background: #396364;
+      color: white;
+    }
+
+    .likert-btn.disabled {
+      pointer-events: none;
+      opacity: 0.75;
     }
   </style>
 </head>
 
 <body>
 
-<h1 id="title">Vent litt …</h1>
+  <h1 id="title">Avstemning</h1>
 
-<!-- Ventemelding -->
-<div id="waitingBox" class="waiting">
-  Foreleser starter snart 🙂
-</div>
+  <div id="waitingBox">Venter på at avstemning starter …</div>
 
-<!-- SBS -->
-<div id="sbsBox" class="hidden">
-  <button class="green"  onclick="vote('A')">Sunn</button><br>
-  <button class="yellow" onclick="vote('B')">Bekymringsfull</button><br>
-  <button class="red"    onclick="vote('C')">Skadelig</button>
-</div>
+  <!-- SBS -->
+  <div id="sbsBox" class="hidden">
+    <button class="choice green"  onclick="voteABC('A')">Sunn</button><br>
+    <button class="choice yellow" onclick="voteABC('B')">Bekymringsfull</button><br>
+    <button class="choice red"    onclick="voteABC('C')">Skadelig</button>
+  </div>
 
-<!-- BNR -->
-<div id="bnrBox" class="hidden">
-  <button class="green"  onclick="vote('A')">Beskyttende</button><br>
-  <button class="yellow" onclick="vote('B')">Nøytral</button><br>
-  <button class="red"    onclick="vote('C')">Risiko</button>
-</div>
+  <!-- BNR -->
+  <div id="bnrBox" class="hidden">
+    <button class="choice green"  onclick="voteABC('A')">Beskyttende</button><br>
+    <button class="choice yellow" onclick="voteABC('B')">Nøytral</button><br>
+    <button class="choice red"    onclick="voteABC('C')">Risiko</button>
+  </div>
 
-<!-- JA / NEI -->
-<div id="jnBox" class="hidden">
-  <button class="green" onclick="vote('A')">Ja</button><br>
-  <button class="red"   onclick="vote('B')">Nei</button>
-</div>
+  <!-- JA/NEI -->
+  <div id="jnBox" class="hidden">
+    <button class="choice green" onclick="voteABC('A')">Ja</button><br>
+    <button class="choice red"   onclick="voteABC('B')">Nei</button>
+  </div>
 
-<p id="msg" class="waiting"></p>
+  <!-- LIKERT -->
+  <div id="likertBox" class="hidden">
+    <div class="likert-wrap">
+      <div class="likert-scale-label">
+        0 = lavt &nbsp; | &nbsp; 10 = høyt
+      </div>
+      <div class="likert-grid" id="likertGrid"></div>
+    </div>
+  </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <div id="msg"></div>
 
-<script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyBtjn54Bz0Mjeh43hanythhbAhPBna7-Eg",
-    authDomain: "profesor-7e112.firebaseapp.com",
-    projectId: "profesor-7e112",
-  };
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBtjn54Bz0Mjeh43hanythhbAhPBna7-Eg",
+      authDomain: "profesor-7e112.firebaseapp.com",
+      projectId: "profesor-7e112",
+    };
 
-  const pollRef  = db.collection("polls").doc("livePoll");
-  const stateRef = db.collection("app").doc("state");
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-  let hasVoted = false;
-  let mode  = null;
-  let round = null;
+    const pollRef  = db.collection("polls").doc("livePoll");
+    const stateRef = db.collection("app").doc("state");
 
-  stateRef.onSnapshot(doc => {
-    if (!doc.exists) return;
+    let mode = null;
+    let round = null;
+    let hasVoted = false;
 
-    const newMode  = doc.data().mode  ?? null;
-    const newRound = doc.data().round ?? null;
+    const waitingBox = document.getElementById("waitingBox");
+    const msgEl = document.getElementById("msg");
+    const likertGrid = document.getElementById("likertGrid");
 
-    if (newMode !== mode || newRound !== round) {
-      mode  = newMode;
-      round = newRound;
+    buildLikertButtons();
 
-      hasVoted = false;
-      enableAllButtons();
-      showWaitingMessage();
+    function buildLikertButtons() {
+      likertGrid.innerHTML = "";
+      for (let i = 10; i >= 0; i--) {
+        const btn = document.createElement("button");
+        btn.className = "likert-btn";
+        btn.textContent = i;
+        btn.dataset.value = i;
+        btn.addEventListener("click", () => voteLikert(i, btn));
+        likertGrid.appendChild(btn);
+      }
+    }
+
+    stateRef.onSnapshot(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+
+      const newMode = d.mode ?? null;
+      const newRound = d.round ?? null;
+
+      if (newMode !== mode || newRound !== round) {
+        mode = newMode;
+        round = newRound;
+        hasVoted = false;
+        resetUI();
+      }
+
       render();
+    });
+
+    function render() {
+      hideAll();
+
+      if (!mode) {
+        waitingBox.classList.remove("hidden");
+        setMsg("");
+        return;
+      }
+
+      waitingBox.classList.add("hidden");
+
+      // Vis generell melding kun etter stemme
+      if (!hasVoted) setMsg("");
+
+      if (mode === "sbs")   { show("sbsBox"); return; }
+      if (mode === "bnr")   { show("bnrBox"); return; }
+      if (mode === "yesno") { show("jnBox");  return; }
+      if (mode === "likert"){ show("likertBox"); return; }
+
+      // fallback
+      waitingBox.classList.remove("hidden");
     }
-  });
 
-  function render() {
-    hideAll();
-
-    if (!mode) {
-      setTitle("Vent litt …");
-      show("waitingBox");
-      return;
-    }
-
-    setTitle("Velg svar");
-
-    if (mode === "sbs")   { show("sbsBox"); return; }
-    if (mode === "bnr")   { show("bnrBox"); return; }
-    if (mode === "yesno") { show("jnBox");  return; }
-
-    show("waitingBox");
-  }
-
-  async function vote(option) {
-    if (hasVoted) return;
-
-    try {
-      await pollRef.set(
-        { [option]: firebase.firestore.FieldValue.increment(1) },
-        { merge: true }
-      );
-
+    async function voteABC(option) {
+      if (hasVoted) return;
       hasVoted = true;
-      document.getElementById("msg").textContent = "Takk, svaret er avgitt!";
-      document.getElementById("msg").className = "done";
-      disableAllButtons();
 
-    } catch (err) {
-      document.getElementById("msg").textContent =
-        "Noe gikk galt – prøv igjen";
-      document.getElementById("msg").className = "waiting";
+      disableChoiceButtons(true);
+
+      try {
+        await pollRef.set(
+          { [option]: firebase.firestore.FieldValue.increment(1) },
+          { merge: true }
+        );
+        setMsg("Takk, svaret er avgitt!");
+      } catch (err) {
+        hasVoted = false;
+        disableChoiceButtons(false);
+        setMsg("Noe gikk galt – prøv igjen");
+      }
     }
-  }
 
-  function showWaitingMessage() {
-    const msg = document.getElementById("msg");
-    msg.textContent = "Venter på svar …";
-    msg.className = "waiting";
-  }
+    async function voteLikert(value, btn) {
+      if (hasVoted) return;
+      hasVoted = true;
 
-  function hideAll() {
-    hide("waitingBox");
-    hide("sbsBox");
-    hide("bnrBox");
-    hide("jnBox");
-  }
+      lockLikertButtons(btn);
 
-  function disableAllButtons() {
-    document.querySelectorAll("button").forEach(b => b.disabled = true);
-  }
+      try {
+        await pollRef.set({
+          likertSum: firebase.firestore.FieldValue.increment(value),
+          likertCount: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
 
-  function enableAllButtons() {
-    document.querySelectorAll("button").forEach(b => b.disabled = false);
-  }
+        setMsg("Takk, svaret er avgitt!");
+      } catch (err) {
+        hasVoted = false;
+        unlockLikertButtons();
+        setMsg("Noe gikk galt – prøv igjen");
+      }
+    }
 
-  function show(id) {
-    document.getElementById(id).style.display = "block";
-  }
+    function resetUI() {
+      setMsg("");
 
-  function hide(id) {
-    document.getElementById(id).style.display = "none";
-  }
+      disableChoiceButtons(false);
+      unlockLikertButtons();
+    }
 
-  function setTitle(text) {
-    document.getElementById("title").textContent = text;
-  }
-</script>
+    function disableChoiceButtons(disable) {
+      document.querySelectorAll("button.choice").forEach(b => b.disabled = disable);
+    }
+
+    function lockLikertButtons(selectedBtn) {
+      document.querySelectorAll(".likert-btn").forEach(b => {
+        b.classList.add("disabled");
+        if (b === selectedBtn) b.classList.add("selected");
+      });
+    }
+
+    function unlockLikertButtons() {
+      document.querySelectorAll(".likert-btn").forEach(b => {
+        b.classList.remove("disabled", "selected");
+      });
+    }
+
+    function hideAll() {
+      ["sbsBox","bnrBox","jnBox","likertBox"].forEach(id => {
+        document.getElementById(id).classList.add("hidden");
+      });
+      waitingBox.classList.add("hidden");
+    }
+
+    function show(id) {
+      document.getElementById(id).classList.remove("hidden");
+    }
+
+    function setMsg(text) {
+      msgEl.textContent = text;
+    }
+  </script>
 
 </body>
 </html>
+
+
