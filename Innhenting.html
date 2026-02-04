@@ -4,265 +4,100 @@
   <meta charset="UTF-8" />
   <title>Avstemning</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      margin: 0;
-      padding: 2rem 1.5rem;
-      text-align: center;
-    }
-
-    h1 { margin-bottom: 0.8rem; }
-
-    .hidden { display: none; }
-
-    #waitingBox {
-      margin-top: 1.2rem;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #00416a;
-    }
-
-    #msg {
-      margin-top: 1.4rem;
-      font-size: 1.1rem;
-      font-weight: 800;
-      color: #00416a;
-      min-height: 1.4em;
-    }
-
-    /* ============ Standard-knapper (SBS/BNR/YESNO) ============ */
-    button.choice {
-      font-size: 1.35rem;
-      padding: 1.1rem 2rem;
-      margin: 0.7rem 0;
-      width: 85%;
-      max-width: 360px;
-
-      border: none;
-      border-radius: 10px;
-      font-weight: 800;
-      cursor: pointer;
-
-      transition: filter 0.15s ease, transform 0.1s ease;
-    }
-
-    button.choice:hover { filter: brightness(1.06); }
-    button.choice:active { transform: translateY(1px); }
-
-    button.choice:disabled {
-      opacity: 0.65;
-      cursor: default;
-      transform: none;
-      filter: none;
-    }
-
-    .green  { background:#2e7d32; color:white; }
-    .yellow { background:#f9a825; color:#222; }
-    .red    { background:#c62828; color:white; }
-
-    /* =======================
-       LIKERT – ÉN KOLONNE, 10→0
-       ======================= */
-
-    .likert-wrap { margin-top: 1.2rem; }
-
-    .likert-scale-label {
-      font-weight: 700;
-      opacity: 0.8;
-      margin-bottom: 0.6rem;
-    }
-
-    .likert-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 6px;
-      max-width: 220px;
-      margin: 0 auto;
-    }
-
-    .likert-btn {
-      padding: 0.45rem 0;
-      font-size: 1.05rem;
-      font-weight: 900;
-      border-radius: 10px;
-      border: none;
-      background: #f2f2f2;
-      cursor: pointer;
-      transition: background-color 0.15s ease, transform 0.08s ease;
-    }
-
-    .likert-btn:hover { background: #e4e4e4; }
-    .likert-btn:active { transform: translateY(1px); }
-
-    .likert-btn.selected {
-      background: #396364;
-      color: white;
-    }
-
-    .likert-btn.disabled {
-      pointer-events: none;
-      opacity: 0.75;
-    }
-
-    /* =======================
-       OPEN-ENDED + WORDCLOUD layout helpers
-       ======================= */
-    .box-wrap {
-      max-width: 520px;
-      margin: 0 auto;
-      text-align: left;
-    }
-
-    .label {
-      font-weight: 800;
-      display: block;
-      margin-bottom: 0.4rem;
-    }
-
-    textarea {
-      width: 100%;
-      font-size: 1.05rem;
-      padding: 0.8rem;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-      resize: vertical;
-    }
-
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 0.4rem;
-      gap: 10px;
-    }
-
-    .counter {
-      font-weight: 700;
-      opacity: 0.8;
-      white-space: nowrap;
-    }
-
-    /* Wordcloud inputs */
-    .wc-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-
-    .wc-input {
-      width: 100%;
-      font-size: 1.05rem;
-      padding: 0.75rem 0.8rem;
-      border-radius: 10px;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-    }
-
-    .hint {
-      margin-top: 0.6rem;
-      font-weight: 700;
-      opacity: 0.75;
-      font-size: 0.98rem;
-      text-align: left;
-    }
-  </style>
+  <link rel="stylesheet" href="theme.css">
 </head>
 
-<body>
+<body class="collect">
+  <div class="collect-wrap">
+    <h1 id="title">Avstemning</h1>
 
-  <h1 id="title">Avstemning</h1>
+    <div id="waitingBox">Vi er straks i gang!</div>
 
-  <div id="waitingBox">Vi er straks i gang!</div>
-
-  <!-- SBS -->
-  <div id="sbsBox" class="hidden">
-    <button class="choice green"  onclick="voteABC('A')">Sunn</button><br>
-    <button class="choice yellow" onclick="voteABC('B')">Bekymringsfull</button><br>
-    <button class="choice red"    onclick="voteABC('C')">Skadelig</button>
-  </div>
-
-  <!-- BNR -->
-  <div id="bnrBox" class="hidden">
-    <button class="choice green"  onclick="voteABC('A')">Beskyttende</button><br>
-    <button class="choice yellow" onclick="voteABC('B')">Nøytral</button><br>
-    <button class="choice red"    onclick="voteABC('C')">Risiko</button>
-  </div>
-
-  <!-- JA/NEI -->
-  <div id="jnBox" class="hidden">
-    <button class="choice green" onclick="voteABC('A')">Ja</button><br>
-    <button class="choice red"   onclick="voteABC('B')">Nei</button>
-  </div>
-
-  <!-- LIKERT -->
-  <div id="likertBox" class="hidden">
-    <div class="likert-wrap">
-      <div class="likert-scale-label">
-        0 = lavt &nbsp; | &nbsp; 10 = høyt
-      </div>
-      <div class="likert-grid" id="likertGrid"></div>
+    <!-- SBS -->
+    <div id="sbsBox" class="hidden">
+      <button class="choice green"  onclick="voteABC('A')">Sunn</button><br>
+      <button class="choice yellow" onclick="voteABC('B')">Bekymringsfull</button><br>
+      <button class="choice red"    onclick="voteABC('C')">Skadelig</button>
     </div>
-  </div>
 
-  <!-- OPEN-ENDED -->
-  <div id="openBox" class="hidden">
-    <div class="box-wrap">
-      <label for="openText" class="label">Skriv et kort svar (maks 200 tegn)</label>
+    <!-- BNR -->
+    <div id="bnrBox" class="hidden">
+      <button class="choice green"  onclick="voteABC('A')">Beskyttende</button><br>
+      <button class="choice yellow" onclick="voteABC('B')">Nøytral</button><br>
+      <button class="choice red"    onclick="voteABC('C')">Risiko</button>
+    </div>
 
-      <textarea id="openText" rows="4" maxlength="200"></textarea>
+    <!-- ABC (ny) -->
+    <div id="abcBox" class="hidden">
+      <button class="choice green"  onclick="voteABC('A')">A</button><br>
+      <button class="choice yellow" onclick="voteABC('B')">B</button><br>
+      <button class="choice red"    onclick="voteABC('C')">C</button>
+    </div>
 
-      <div class="row">
-        <div id="openCount" class="counter">0 / 200</div>
-        <button id="openSendBtn" class="choice green" style="width:auto; padding:0.8rem 1.2rem; margin:0;" onclick="sendOpenAnswer()">
-          Send
-        </button>
+    <!-- JA/NEI -->
+    <div id="jnBox" class="hidden">
+      <button class="choice green" onclick="voteABC('A')">Ja</button><br>
+      <button class="choice red"   onclick="voteABC('B')">Nei</button>
+    </div>
+
+    <!-- LIKERT -->
+    <div id="likertBox" class="hidden">
+      <div class="likert-wrap">
+        <div class="likert-scale-label">
+          0 = lavt &nbsp; | &nbsp; 10 = høyt
+        </div>
+        <div class="likert-grid" id="likertGrid"></div>
       </div>
     </div>
-  </div>
 
-  <!-- WORD CLOUD -->
-  <div id="wcBox" class="hidden">
-    <div class="box-wrap">
-      <div class="label">Skriv inntil 3 ord (maks 20 tegn per ord)</div>
+    <!-- OPEN-ENDED -->
+    <div id="openBox" class="hidden">
+      <div class="box-wrap">
+        <label for="openText" class="label">Skriv et kort svar (maks 200 tegn)</label>
+        <textarea id="openText" rows="4" maxlength="200"></textarea>
 
-      <div class="wc-grid">
-        <input id="wc1" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 1">
-        <input id="wc2" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 2 (valgfritt)">
-        <input id="wc3" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 3 (valgfritt)">
-      </div>
-
-      <div class="row" style="justify-content:flex-end; margin-top:0.8rem;">
-        <button id="wcSendBtn" class="choice green" style="width:auto; padding:0.8rem 1.2rem; margin:0;" onclick="sendWordCloud()">
-          Send
-        </button>
-      </div>
-
-      <div class="hint">
-        Tips: Ett ord per felt. Bindestrek er ok. Tall og emojis blir ignorert.
+        <div class="row">
+          <div id="openCount" class="counter">0 / 200</div>
+          <button id="openSendBtn" class="choice green btn--compact" onclick="sendOpenAnswer()">
+            Send
+          </button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div id="msg"></div>
+    <!-- WORD CLOUD -->
+    <div id="wcBox" class="hidden">
+      <div class="box-wrap">
+        <div class="label">Skriv inntil 3 ord (maks 20 tegn per ord)</div>
+
+        <div class="wc-grid">
+          <input id="wc1" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 1">
+          <input id="wc2" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 2 (valgfritt)">
+          <input id="wc3" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 3 (valgfritt)">
+        </div>
+
+        <div class="row" style="justify-content:flex-end; margin-top:0.8rem;">
+          <button id="wcSendBtn" class="choice green btn--compact" onclick="sendWordCloud()">
+            Send
+          </button>
+        </div>
+
+        <div class="hint">
+          Tips: Ett ord per felt. Bindestrek er ok. Tall og emojis blir ignorert.
+        </div>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="config.js"></script>
 
   <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBtjn54Bz0Mjeh43hanythhbAhPBna7-Eg",
-      authDomain: "profesor-7e112.firebaseapp.com",
-      projectId: "profesor-7e112",
-    };
-
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    const pollRef  = db.collection("polls").doc("livePoll");
-    const stateRef = db.collection("app").doc("state");
+    const db = FirebaseUtil.initFirebaseOnce();
+    const { stateRef, pollRef } = FirebaseUtil.getRefs(db);
 
     let mode = null;
     let round = null;
@@ -272,29 +107,20 @@
     const msgEl = document.getElementById("msg");
     const likertGrid = document.getElementById("likertGrid");
 
-    // OPEN-ENDED elements
     const openText = document.getElementById("openText");
     const openCount = document.getElementById("openCount");
     const openSendBtn = document.getElementById("openSendBtn");
 
-    // WORDCLOUD elements
     const wc1 = document.getElementById("wc1");
     const wc2 = document.getElementById("wc2");
     const wc3 = document.getElementById("wc3");
     const wcSendBtn = document.getElementById("wcSendBtn");
 
-    // Norsk stoppliste (kompakt men effektiv)
-    const STOPWORDS = new Set([
-      "og","men","eller","for","som","at","det","den","de","di","du","jeg","vi","dere","i","på","av","til","fra",
-      "er","var","blir","ble","har","hadde","ha","kan","kunne","skal","skulle","vil","ville","må","måtte",
-      "ikke","ingen","noen","nok","bare","også","så","da","der","her","hvor","hva","hvem","hvordan","når",
-      "en","ei","et","ene","ett","dette","disse","denne","sånn","slik","altså","jo","nei","ja"
-    ]);
+    const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
 
-    // Counter open-ended
     if (openText && openCount) {
       openText.addEventListener("input", () => {
-        openCount.textContent = (openText.value.length || 0) + " / 200";
+        openCount.textContent = (openText.value.length || 0) + " / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
       });
     }
 
@@ -309,32 +135,22 @@
       if (wcSendBtn) wcSendBtn.disabled = disabled;
     }
 
-    // Sanitize for wordcloud: lower + trim + keep letters (a-zæøå) + hyphen
     function sanitizeWord(raw) {
       const s = (raw || "").toLowerCase().trim();
       if (!s) return "";
 
-      // fjern alt som ikke er bokstav (inkl æøå) eller bindestrek
       let cleaned = s.replace(/[^a-zæøå\-]/g, "");
-
-      // fjern bindestrek i start/slutt
       cleaned = cleaned.replace(/^\-+|\-+$/g, "");
-
-      // stopp hvis tom
       if (!cleaned) return "";
-
-      // filtrer stopwords
       if (STOPWORDS.has(cleaned)) return "";
-
-      // maks 20 tegn per ord
-      if (cleaned.length > 20) cleaned = cleaned.slice(0, 20);
-
+      if (cleaned.length > CONFIG.LIMITS.WORD_MAX_CHARS) cleaned = cleaned.slice(0, CONFIG.LIMITS.WORD_MAX_CHARS);
       return cleaned;
     }
 
     buildLikertButtons();
 
     function buildLikertButtons() {
+      if (!likertGrid) return;
       likertGrid.innerHTML = "";
       for (let i = 10; i >= 0; i--) {
         const btn = document.createElement("button");
@@ -375,12 +191,13 @@
       waitingBox.classList.add("hidden");
       if (!hasVoted) setMsg("");
 
-      if (mode === "sbs")       { show("sbsBox"); return; }
-      if (mode === "bnr")       { show("bnrBox"); return; }
-      if (mode === "yesno")     { show("jnBox");  return; }
-      if (mode === "likert")    { show("likertBox"); return; }
-      if (mode === "open")      { show("openBox"); return; }
-      if (mode === "wordcloud") { show("wcBox"); return; }
+      if (mode === CONFIG.MODES.SBS)       { show("sbsBox"); return; }
+      if (mode === CONFIG.MODES.BNR)       { show("bnrBox"); return; }
+      if (mode === CONFIG.MODES.ABC)       { show("abcBox"); return; }
+      if (mode === CONFIG.MODES.YESNO)     { show("jnBox");  return; }
+      if (mode === CONFIG.MODES.LIKERT)    { show("likertBox"); return; }
+      if (mode === CONFIG.MODES.OPEN)      { show("openBox"); return; }
+      if (mode === CONFIG.MODES.WORDCLOUD) { show("wcBox"); return; }
 
       waitingBox.classList.remove("hidden");
     }
@@ -396,11 +213,11 @@
           { [option]: firebase.firestore.FieldValue.increment(1) },
           { merge: true }
         );
-        setMsg("Takk, svaret er avgitt!");
+        setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
         disableChoiceButtons(false);
-        setMsg("Noe gikk galt – prøv igjen");
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
@@ -416,11 +233,11 @@
           likertCount: firebase.firestore.FieldValue.increment(1)
         }, { merge: true });
 
-        setMsg("Takk, svaret er avgitt!");
+        setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
         unlockLikertButtons();
-        setMsg("Noe gikk galt – prøv igjen");
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
@@ -429,7 +246,7 @@
 
       const text = (openText?.value || "").trim();
       if (!text) {
-        setMsg("Skriv noe før du sender 🙂");
+        setMsg(CONFIG.TEXT.WRITE_SOMETHING);
         return;
       }
 
@@ -439,19 +256,19 @@
       try {
         const roundId = "round_" + (round ?? 0);
 
-        await db.collection("openAnswers")
+        await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
           .doc(roundId)
           .collection("answers")
           .add({
-            text: text.slice(0, 200),
+            text: text.slice(0, CONFIG.LIMITS.OPEN_MAX_CHARS),
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        setMsg("Takk, svaret er avgitt!");
+        setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
         setOpenDisabled(false);
-        setMsg("Noe gikk galt – prøv igjen");
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
@@ -465,7 +282,7 @@
       ].filter(Boolean);
 
       if (w.length === 0) {
-        setMsg("Skriv minst ett ord (og unngå helt vanlige ord) 🙂");
+        setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD);
         return;
       }
 
@@ -475,19 +292,19 @@
       try {
         const roundId = "round_" + (round ?? 0);
 
-        await db.collection("wordCloudAnswers")
+        await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
           .doc(roundId)
           .collection("answers")
           .add({
-            words: w, // 1–3 ord
+            words: w,
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        setMsg("Takk, svaret er avgitt!");
+        setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
         setWcDisabled(false);
-        setMsg("Noe gikk galt – prøv igjen");
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
@@ -497,14 +314,12 @@
       disableChoiceButtons(false);
       unlockLikertButtons();
 
-      // open reset
       if (openText && openCount) {
         openText.value = "";
-        openCount.textContent = "0 / 200";
+        openCount.textContent = "0 / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
       }
       setOpenDisabled(false);
 
-      // wordcloud reset
       if (wc1) wc1.value = "";
       if (wc2) wc2.value = "";
       if (wc3) wc3.value = "";
@@ -513,7 +328,6 @@
 
     function disableChoiceButtons(disable) {
       document.querySelectorAll("button.choice").forEach(b => {
-        // Ikke disable open/wc sine send-knapper her
         if (b.id === "openSendBtn") return;
         if (b.id === "wcSendBtn") return;
         b.disabled = disable;
@@ -534,7 +348,7 @@
     }
 
     function hideAll() {
-      ["sbsBox","bnrBox","jnBox","likertBox","openBox","wcBox"].forEach(id => {
+      ["sbsBox","bnrBox","abcBox","jnBox","likertBox","openBox","wcBox"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add("hidden");
       });
@@ -550,7 +364,6 @@
       msgEl.textContent = text;
     }
   </script>
-
 </body>
 </html>
 
