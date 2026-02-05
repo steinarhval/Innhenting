@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <title>Avstemning</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="theme.css">
+</head>
+
+<body class="collect">
+  <div class="collect-wrap">
+    <h1 id="title">Avstemning</h1>
+
+    <div id="waitingBox">Vi er straks i gang!</div>
+
+    <!-- SBS -->
+    <div id="sbsBox" class="hidden">
+      <div class="choice-stack">
+        <button class="choice sbs-green"  onclick="voteABC('A')">Sunn</button>
+        <button class="choice sbs-yellow" onclick="voteABC('B')">Bekymringsfull</button>
+        <button class="choice sbs-red"    onclick="voteABC('C')">Skadelig</button>
+      </div>
+    </div>
+
+    <!-- BNR -->
+    <div id="bnrBox" class="hidden">
+      <div class="choice-stack">
+        <button class="choice sbs-green"  onclick="voteABC('A')">Beskyttende</button>
+        <button class="choice sbs-yellow" onclick="voteABC('B')">Nøytral</button>
+        <button class="choice sbs-red"    onclick="voteABC('C')">Risiko</button>
+      </div>
+    </div>
+
+    <!-- ABC -->
+    <div id="abcBox" class="hidden">
+      <div class="choice-stack">
+        <button class="choice sbs-green"  onclick="voteABC('A')">A</button>
+        <button class="choice sbs-yellow" onclick="voteABC('B')">B</button>
+        <button class="choice sbs-red"    onclick="voteABC('C')">C</button>
+      </div>
+    </div>
+
+    <!-- JA/NEI -->
+    <div id="jnBox" class="hidden">
+      <div class="choice-stack">
+        <button class="choice sbs-green" onclick="voteABC('A')">Ja</button>
+        <button class="choice sbs-red"   onclick="voteABC('B')">Nei</button>
+      </div>
+    </div>
+
+    <!-- LIKERT -->
+    <div id="likertBox" class="hidden">
+      <div class="likert-wrap">
+        <div class="likert-scale-label">
+          0 = lavt &nbsp; | &nbsp; 10 = høyt
+        </div>
+        <div class="likert-grid" id="likertGrid"></div>
+      </div>
+    </div>
+
+    <!-- OPEN-ENDED -->
+    <div id="openBox" class="hidden">
+      <div class="box-wrap">
+        <label for="openText" class="label">Skriv et kort svar (maks 200 tegn)</label>
+        <textarea id="openText" rows="4" maxlength="200"></textarea>
+
+        <div class="row">
+          <div id="openCount" class="counter">0 / 200</div>
+          <button id="openSendBtn" class="btn btn--success btn--compact" onclick="sendOpenAnswer()">
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORD CLOUD -->
+    <div id="wcBox" class="hidden">
+      <div class="box-wrap">
+        <div class="label">Skriv inntil 3 ord (maks 20 tegn per ord)</div>
+
+        <div class="wc-grid">
+          <input id="wc1" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 1">
+          <input id="wc2" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 2 (valgfritt)">
+          <input id="wc3" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 3 (valgfritt)">
+        </div>
+
+        <div class="row row--end">
+          <button id="wcSendBtn" class="btn btn--success btn--compact" onclick="sendWordCloud()">
+            Send
+          </button>
+        </div>
+
+        <div class="hint">
+          Tips: Ett ord per felt. Bindestrek er ok. Tall og emojis blir ignorert.
+        </div>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="config.js"></script>
+
+  <script>
+    const db = FirebaseUtil.initFirebaseOnce();
+    const { stateRef, pollRef } = FirebaseUtil.getRefs(db);
+
+    let mode = null;
+    let round = null;
+    let hasVoted = false;
+
+    const waitingBox = document.getElementById("waitingBox");
+    const msgEl = document.getElementById("msg");
+    const likertGrid = document.getElementById("likertGrid");
+
+    const openText = document.getElementById("openText");
+    const openCount = document.getElementById("openCount");
+    const openSendBtn = document.getElementById("openSendBtn");
+
+    const wc1 = document.getElementById("wc1");
+    const wc2 = document.getElementById("wc2");
+    const wc3 = document.getElementById("wc3");
+    const wcSendBtn = document.getElementById("wcSendBtn");
+
+    const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
+
+    if (openText && openCount) {
+      openText.addEventListener("input", () => {
+        openCount.textContent = (openText.value.length || 0) + " / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
+      });
+    }
+
+    function setOpenDisabled(disabled) {
+      if (!openText || !openSendBtn) return;
+      openText.disabled = disabled;
+      openSendBtn.disabled = disabled;
+    }
+
+    function setWcDisabled(disabled) {
+      [wc1,wc2,wc3].forEach(x => { if (x) x.disabled = disabled; });
+      if (wcSendBtn) wcSendBtn.disabled = disabled;
+    }
+
+    function sanitizeWord(raw) {
+      const s = (raw || "").toLowerCase().trim();
+      if (!s) return "";
+
+      let cleaned = s.replace(/[^a-zæøå\-]/g, "");
+      cleaned = cleaned.replace(/^\-+|\-+$/g, "");
+      if (!cleaned) return "";
+      if (STOPWORDS.has(cleaned)) return "";
+      if (cleaned.length > CONFIG.LIMITS.WORD_MAX_CHARS) cleaned = cleaned.slice(0, CONFIG.LIMITS.WORD_MAX_CHARS);
+      return cleaned;
+    }
+
+    buildLikertButtons();
+
+    function buildLikertButtons() {
+      if (!likertGrid) return;
+      likertGrid.innerHTML = "";
+      for (let i = 10; i >= 0; i--) {
+        const btn = document.createElement("button");
+        btn.className = "likert-btn";
+        btn.textContent = i;
+        btn.dataset.value = i;
+        btn.addEventListener("click", () => voteLikert(i, btn));
+        likertGrid.appendChild(btn);
+      }
+    }
+
+    stateRef.onSnapshot(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+
+      const newMode = d.mode ?? null;
+      const newRound = d.round ?? null;
+
+      if (newMode !== mode || newRound !== round) {
+        mode = newMode;
+        round = newRound;
+        hasVoted = false;
+        resetUI();
+      }
+
+      render();
+    });
+
+    function render() {
+      hideAll();
+
+      if (!mode) {
+        waitingBox.classList.remove("hidden");
+        setMsg("");
+        return;
+      }
+
+      waitingBox.classList.add("hidden");
+      if (!hasVoted) setMsg("");
+
+      if (mode === CONFIG.MODES.SBS)       { show("sbsBox"); return; }
+      if (mode === CONFIG.MODES.BNR)       { show("bnrBox"); return; }
+      if (mode === CONFIG.MODES.ABC)       { show("abcBox"); return; }
+      if (mode === CONFIG.MODES.YESNO)     { show("jnBox");  return; }
+      if (mode === CONFIG.MODES.LIKERT)    { show("likertBox"); return; }
+      if (mode === CONFIG.MODES.OPEN)      { show("openBox"); return; }
+      if (mode === CONFIG.MODES.WORDCLOUD) { show("wcBox"); return; }
+
+      waitingBox.classList.remove("hidden");
+    }
+
+    function getActiveBoxElement() {
+      if (!mode) return null;
+      if (mode === CONFIG.MODES.SBS) return document.getElementById("sbsBox");
+      if (mode === CONFIG.MODES.BNR) return document.getElementById("bnrBox");
+      if (mode === CONFIG.MODES.ABC) return document.getElementById("abcBox");
+      if (mode === CONFIG.MODES.YESNO) return document.getElementById("jnBox");
+      if (mode === CONFIG.MODES.LIKERT) return document.getElementById("likertBox");
+      if (mode === CONFIG.MODES.OPEN) return document.getElementById("openBox");
+      if (mode === CONFIG.MODES.WORDCLOUD) return document.getElementById("wcBox");
+      return null;
+    }
+
+    async function voteABC(option) {
+      if (hasVoted) return;
+      hasVoted = true;
+
+      disableActiveChoiceButtons(true);
+
+      try {
+        await pollRef.set(
+          { [option]: firebase.firestore.FieldValue.increment(1) },
+          { merge: true }
+        );
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
+        hasVoted = false;
+        disableActiveChoiceButtons(false);
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
+      }
+    }
+
+    async function voteLikert(value, btn) {
+      if (hasVoted) return;
+      hasVoted = true;
+
+      lockLikertButtons(btn);
+
+      try {
+        await pollRef.set({
+          likertSum: firebase.firestore.FieldValue.increment(value),
+          likertCount: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
+
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
+        hasVoted = false;
+        unlockLikertButtons();
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
+      }
+    }
+
+    async function sendOpenAnswer() {
+      if (hasVoted) return;
+
+      const text = (openText?.value || "").trim();
+      if (!text) {
+        setMsg(CONFIG.TEXT.WRITE_SOMETHING);
+        return;
+      }
+
+      hasVoted = true;
+      setOpenDisabled(true);
+
+      try {
+        const roundId = "round_" + (round ?? 0);
+
+        await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
+          .doc(roundId)
+          .collection("answers")
+          .add({
+            text: text.slice(0, CONFIG.LIMITS.OPEN_MAX_CHARS),
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
+        hasVoted = false;
+        setOpenDisabled(false);
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
+      }
+    }
+
+    async function sendWordCloud() {
+      if (hasVoted) return;
+
+      const w = [
+        sanitizeWord(wc1?.value),
+        sanitizeWord(wc2?.value),
+        sanitizeWord(wc3?.value)
+      ].filter(Boolean);
+
+      if (w.length === 0) {
+        setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD);
+        return;
+      }
+
+      hasVoted = true;
+      setWcDisabled(true);
+
+      try {
+        const roundId = "round_" + (round ?? 0);
+
+        await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
+          .doc(roundId)
+          .collection("answers")
+          .add({
+            words: w,
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+          });
+
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
+        hasVoted = false;
+        setWcDisabled(false);
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
+      }
+    }
+
+    function resetUI() {
+      setMsg("");
+
+      disableActiveChoiceButtons(false);
+      unlockLikertButtons();
+
+      if (openText && openCount) {
+        openText.value = "";
+        openCount.textContent = "0 / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
+      }
+      setOpenDisabled(false);
+
+      if (wc1) wc1.value = "";
+      if (wc2) wc2.value = "";
+      if (wc3) wc3.value = "";
+      setWcDisabled(false);
+    }
+
+    function disableActiveChoiceButtons(disable) {
+      const box = getActiveBoxElement();
+      if (!box) return;
+
+      box.querySelectorAll("button.choice").forEach(b => {
+        b.disabled = disable;
+      });
+    }
+
+    function lockLikertButtons(selectedBtn) {
+      document.querySelectorAll(".likert-btn").forEach(b => {
+        b.classList.add("disabled");
+        if (b === selectedBtn) b.classList.add("selected");
+      });
+    }
+
+    function unlockLikertButtons() {
+      document.querySelectorAll(".likert-btn").forEach(b => {
+        b.classList.remove("disabled", "selected");
+      });
+    }
+
+    function hideAll() {
+      ["sbsBox","bnrBox","abcBox","jnBox","likertBox","openBox","wcBox"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add("hidden");
+      });
+      waitingBox.classList.add("hidden");
+    }
+
+    function show(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove("hidden");
+    }
+
+    function setMsg(text) {
+      msgEl.textContent = text;
+    }
+  </script>
+</body>
+</html>

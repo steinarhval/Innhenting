@@ -1,6 +1,7 @@
-/* config.js
-   Samler konstanter + små helpers på ett sted.
-   Brukes av alle sider.
+/*/*
+  config.js
+  Samler konstanter + små helpers på ett sted.
+  Brukes av alle sider.
 */
 (function () {
   const CONFIG = {
@@ -70,7 +71,7 @@
       FONT_IF_SINGLE_VALUE: 56,
       FONT: "system-ui",
       FONT_WEIGHT: 800,
-      FILL: "var(--c-brand)", // bruker theme.css
+      FILL: "var(--wordcloud-fill)", // styres av theme.css
     },
 
     TEXT: {
@@ -106,3 +107,4 @@
   window.CONFIG = CONFIG;
   window.FirebaseUtil = { initFirebaseOnce, getRefs };
 })();
+
