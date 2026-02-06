@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hovedmeny</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+
+<body class="menu">
+  <div class="menu-wrap">
+    <h1>Hovedmeny</h1>
+    <div class="hint">Velg modus.</div>
+
+    <button class="menu-btn" onclick="setMode('sbs')">
+      <span class="label">SBS (Sunn / Bekymringsfull / Skadelig)</span>
+      <span class="keycap">1</span>
+    </button>
+
+    <button class="menu-btn" onclick="setMode('bnr')">
+      <span class="label">BNR (Beskyttende / Nøytral / Risiko)</span>
+      <span class="keycap">2</span>
+    </button>
+
+    <button class="menu-btn" onclick="setMode('abc')">
+      <span class="label">ABC</span>
+      <span class="keycap">3</span>
+    </button>
+
+    <button class="menu-btn" onclick="setMode('yesno')">
+      <span class="label">Ja / Nei</span>
+      <span class="keycap">4</span>
+    </button>
+
+    <button class="menu-btn" onclick="setMode('likert')">
+      <span class="label">Likert (0–10)</span>
+      <span class="keycap">5</span>
+    </button>
+
+    <button class="menu-btn" onclick="setMode('open')">
+      <span class="label">Åpent svar</span>
+      <span class="keycap">6</span>
+    </button>
+
+    <button class="menu-btn" onclick="setMode('wordcloud')">
+      <span class="label">Ordsky</span>
+      <span class="keycap">7</span>
+    </button>
+
+    <button class="menu-btn" onclick="location.href='opplegg.html'">
+      <span class="label">Egne undervisningsopplegg</span>
+      <span class="keycap">↗</span>
+    </button>
+
+    <div id="err" class="error"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="config.js"></script>
+
+  <script>
+    const db = FirebaseUtil.initFirebaseOnce();
+    const { stateRef, pollRef } = FirebaseUtil.getRefs(db);
+
+    async function setMode(mode) {
+      hideErr();
+
+      try {
+        // nullstill tall (for knappe-modi/likert)
+        await pollRef.set({
+          A: 0, B: 0, C: 0,
+          likertSum: 0,
+          likertCount: 0
+        }, { merge: true });
+
+        // sett modus + start innhenting
+        await stateRef.set({
+          mode: mode,
+          showResults: false,
+          status: "collecting",
+          ts: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // åpne resultatskjermen (samme som før)
+        window.location.href = "resultater.html";
+      } catch (e) {
+        showErr("Kunne ikke sette modus:\n" + (e?.message || e));
+      }
+    }
+
+    function showErr(t) {
+      const el = document.getElementById("err");
+      el.style.display = "block";
+      el.textContent = t;
+    }
+    function hideErr() {
+      const el = document.getElementById("err");
+      el.style.display = "none";
+      el.textContent = "";
+    }
+
+    // Hurtigtaster
+    document.addEventListener("keydown", (e) => {
+      const key = (e.key || "").toLowerCase();
+      if (key === "1") setMode("sbs");
+      if (key === "2") setMode("bnr");
+      if (key === "3") setMode("abc");
+      if (key === "4") setMode("yesno");
+      if (key === "5") setMode("likert");
+      if (key === "6") setMode("open");
+      if (key === "7") setMode("wordcloud");
+    });
+  </script>
+</body>
+</html>
+

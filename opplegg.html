@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <title>Undervisningsopplegg</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="theme.css">
+</head>
+
+<body class="programs">
+  <div class="wrap">
+    <h1>Undervisningsopplegg</h1>
+    <p class="sub">Lag og rediger ferdige opplegg (lagres i Firestore). Soft delete er på som standard.</p>
+
+    <div class="row">
+      <input
+        id="newTitle"
+        class="input"
+        type="text"
+        placeholder="Navn på nytt opplegg (f.eks. Risikovurdering ABC)"
+      />
+      <button class="btn btn--success" onclick="createProgram()">Lag nytt</button>
+      <a class="btn btn--ghost" href="hovedmeny.html">Hovedmeny</a>
+    </div>
+
+    <div class="toggleRow">
+      <input id="showDeleted" type="checkbox" />
+      <label for="showDeleted">Vis slettede opplegg</label>
+    </div>
+
+    <div id="list"></div>
+    <div id="errorBox" class="error"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="config.js"></script>
+
+  <script>
+    const db = FirebaseUtil.initFirebaseOnce();
+    const programsRef = db.collection("teachingPrograms");
+
+    let unsub = null;
+    let showDeleted = false;
+
+    document.getElementById("showDeleted").addEventListener("change", (e) => {
+      showDeleted = e.target.checked;
+      attach();
+    });
+
+    attach();
+
+    function attach() {
+      if (unsub) { unsub(); unsub = null; }
+
+      const q = programsRef.orderBy("updatedAt", "desc");
+      unsub = q.onSnapshot(
+        snap => {
+          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          renderList(docs);
+        },
+        err => showError("Kunne ikke hente opplegg:\n" + err.message)
+      );
+    }
+
+    function renderList(items) {
+      hideError();
+
+      const list = document.getElementById("list");
+      const filtered = showDeleted ? items : items.filter(x => !x.isDeleted);
+
+      if (!filtered.length) {
+        list.innerHTML = `<div class="card"><div class="muted">Ingen opplegg ennå.</div></div>`;
+        return;
+      }
+
+      list.innerHTML = filtered.map(p => {
+        const qCount = Array.isArray(p.questions) ? p.questions.length : 0;
+        const deleted = p.isDeleted === true;
+
+        const updated = p.updatedAt?.toDate ? p.updatedAt.toDate() : null;
+        const updatedTxt = updated ? updated.toLocaleString("no-NO") : "—";
+
+        return `
+          <div class="card">
+            <div class="cardTop">
+              <div>
+                <p class="cardTitle">
+                  ${escapeHtml(p.title || "(uten navn)")} ${deleted ? "🗑️" : ""}
+                </p>
+                <div class="cardMeta">
+                  ${qCount} spørsmål · Sist endret: ${escapeHtml(updatedTxt)}
+                </div>
+              </div>
+
+              <div class="actions">
+                <button class="btn btn--success small" onclick="runProgram('${p.id}')">Kjør</button>
+                <button class="btn btn--ghost small" onclick="openEdit('${p.id}')">Åpne</button>
+                ${deleted
+                  ? `<button class="btn btn--success small" onclick="restore('${p.id}')">Gjenopprett</button>`
+                  : `<button class="btn btn--danger small" onclick="softDelete('${p.id}')">Slett</button>`}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function createProgram() {
+      hideError();
+
+      const inp = document.getElementById("newTitle");
+      const title = (inp.value || "").trim();
+      if (!title) {
+        showError("Skriv inn et navn først.");
+        return;
+      }
+
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+
+      const doc = {
+        title,
+        isDeleted: false,
+        createdAt: now,
+        updatedAt: now,
+        questions: []
+      };
+
+      try {
+        const ref = await programsRef.add(doc);
+        inp.value = "";
+        openEdit(ref.id);
+      } catch (err) {
+        showError("Kunne ikke lage opplegg:\n" + err.message);
+      }
+    }
+
+    function openEdit(id) {
+      window.location.href = "opplegg_edit.html?id=" + encodeURIComponent(id);
+    }
+
+    function runProgram(id) {
+      window.location.href = "opplegg_kjor.html?id=" + encodeURIComponent(id);
+    }
+
+    async function softDelete(id) {
+      if (!confirm("Slette opplegg? (Det kan gjenopprettes senere)")) return;
+      try {
+        await programsRef.doc(id).set({
+          isDeleted: true,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        showError("Kunne ikke slette:\n" + err.message);
+      }
+    }
+
+    async function restore(id) {
+      try {
+        await programsRef.doc(id).set({
+          isDeleted: false,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        showError("Kunne ikke gjenopprette:\n" + err.message);
+      }
+    }
+
+    function escapeHtml(s) {
+      return (s || "")
+        .toString()
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function showError(text) {
+      const box = document.getElementById("errorBox");
+      box.style.display = "block";
+      box.textContent = text;
+    }
+    function hideError() {
+      const box = document.getElementById("errorBox");
+      box.style.display = "none";
+      box.textContent = "";
+    }
+  </script>
+</body>
+</html>

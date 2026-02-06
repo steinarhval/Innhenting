@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kjør undervisningsopplegg</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+
+<body class="results">
+  <a class="qr-top" id="qrLink" href="#">
+    <img src="qr_innhenting.png" alt="QR" />
+  </a>
+
+  <div class="page" id="pageRoot">
+    <h1 id="pageTitle">Kjør undervisningsopplegg</h1>
+
+    <div class="total" id="qLine">
+      Laster opplegg…
+    </div>
+
+    <div class="main">
+      <div id="collectBox" class="collect">
+        <div class="waiting">Svar samles inn!</div>
+      </div>
+
+      <div id="resultsBox" class="hidden">
+
+        <!-- SBS -->
+        <div id="sbsBox" class="hidden">
+          <div class="vchart">
+            <div class="vcol">
+              <div class="vbar sbs-green" id="sbsA_v"></div>
+              <div class="vlabel">Sunn</div>
+              <div class="vvalue" id="sbsA_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-yellow" id="sbsB_v"></div>
+              <div class="vlabel">Bekymringsfull</div>
+              <div class="vvalue" id="sbsB_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-red" id="sbsC_v"></div>
+              <div class="vlabel">Skadelig</div>
+              <div class="vvalue" id="sbsC_t">0 % (0)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BNR -->
+        <div id="bnrBox" class="hidden">
+          <div class="vchart">
+            <div class="vcol">
+              <div class="vbar sbs-green" id="bnrA_v"></div>
+              <div class="vlabel">Beskyttende</div>
+              <div class="vvalue" id="bnrA_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-yellow" id="bnrB_v"></div>
+              <div class="vlabel">Nøytral</div>
+              <div class="vvalue" id="bnrB_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-red" id="bnrC_v"></div>
+              <div class="vlabel">Risiko</div>
+              <div class="vvalue" id="bnrC_t">0 % (0)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABC -->
+        <div id="abcBox" class="hidden">
+          <div class="vchart">
+            <div class="vcol">
+              <div class="vbar sbs-green" id="abcA_v"></div>
+              <div class="vlabel">A</div>
+              <div class="vvalue" id="abcA_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-yellow" id="abcB_v"></div>
+              <div class="vlabel">B</div>
+              <div class="vvalue" id="abcB_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-red" id="abcC_v"></div>
+              <div class="vlabel">C</div>
+              <div class="vvalue" id="abcC_t">0 % (0)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- JA/NEI -->
+        <div id="jnBox" class="hidden">
+          <div class="vchart two">
+            <div class="vcol">
+              <div class="vbar sbs-green" id="jnA_v"></div>
+              <div class="vlabel">Ja</div>
+              <div class="vvalue" id="jnA_t">0 % (0)</div>
+            </div>
+            <div class="vcol">
+              <div class="vbar sbs-red" id="jnB_v"></div>
+              <div class="vlabel">Nei</div>
+              <div class="vvalue" id="jnB_t">0 % (0)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIKERT -->
+        <div id="likertBox" class="hidden">
+          <div class="likertWrap">
+            <div class="likertLabels">
+              <span>0</span><span>10</span>
+            </div>
+
+            <div class="likertOuter">
+              <div class="likertMid"></div>
+              <div id="likertFill" class="likertInner"></div>
+            </div>
+
+            <div class="likertText">
+              Gjennomsnitt: <span id="likertAvg">0.0</span> / 10
+            </div>
+            <div class="likertSub">
+              n = <span id="likertN">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- OPEN-ENDED -->
+        <div id="openResBox" class="hidden">
+          <div class="openWrap">
+            <div class="openTitle">Innkomne svar:</div>
+            <div id="openList" class="openList"></div>
+          </div>
+        </div>
+
+        <!-- WORDCLOUD -->
+        <div id="wcResBox" class="hidden">
+          <div class="wcWrap">
+            <div id="wcStage" class="wcCanvas"></div>
+            <div class="wcNote">Oppdateres live når nye ord kommer inn.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="bottom-bar">
+      <a class="menu-link" href="hovedmeny.html" onclick="goMenu(event)">Hovedmeny</a>
+
+      <button id="prevBtn" class="btn btn--ghost" onclick="prevQ()">← Forrige</button>
+
+      <button id="nextBtn" class="btn btn--success" onclick="nextQ()">Neste →</button>
+
+      <button id="showBtn" class="btn btn--show" onclick="toggleResults()">
+        Vis resultater
+      </button>
+    </div>
+
+    <div id="errorBox" class="error"></div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="config.js"></script>
+
+  <!-- D3 + d3-cloud -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-cloud/1.2.7/d3.layout.cloud.min.js"></script>
+
+  <script>
+    // ====== QR ======
+    document.getElementById("qrLink").href = CONFIG.URLS.QR_TARGET;
+
+    // ====== Firebase refs ======
+    const db = FirebaseUtil.initFirebaseOnce();
+    const { stateRef, pollRef } = FirebaseUtil.getRefs(db);
+    const programsRef = db.collection("teachingPrograms");
+
+    // ====== URL param ======
+    const params = new URLSearchParams(window.location.search);
+    const programId = params.get("id");
+
+    // ====== Local state ======
+    let program = null;
+    let questions = [];
+    let qIdx = 0;
+
+    // For å kunne gå frem/tilbake og fortsatt se gamle svar:
+    // round = baseRound + qIdx (baseRound settes når kjøring starter)
+    let baseRound = null;
+
+    // Live state fra Firestore
+    let mode = null;
+    let showResultsFlag = false;
+    let stateRound = 0;
+
+    let poll = { A: 0, B: 0, C: 0, likertSum: 0, likertCount: 0 };
+    let openAnswers = [];
+    let openUnsub = null;
+
+    let wcUnsub = null;
+    let wcAnswersCount = 0;
+    let wcFreq = new Map();
+    let wcLastSignature = "";
+
+    // Wordcloud resize-fix
+    let wcResizeTimer = null;
+    function requestWcRerender() {
+      if (wcResizeTimer) clearTimeout(wcResizeTimer);
+      wcResizeTimer = setTimeout(() => {
+        if (mode === CONFIG.MODES.WORDCLOUD && showResultsFlag) {
+          wcLastSignature = "";
+          renderWordCloud();
+        }
+      }, CONFIG.WORDCLOUD.RESIZE_DEBOUNCE_MS);
+    }
+    window.addEventListener("resize", requestWcRerender);
+
+    const charts = {
+      sbs: {
+        boxId: "sbsBox",
+        items: [
+          { key: "A", barId: "sbsA_v", textId: "sbsA_t" },
+          { key: "B", barId: "sbsB_v", textId: "sbsB_t" },
+          { key: "C", barId: "sbsC_v", textId: "sbsC_t" },
+        ],
+      },
+      bnr: {
+        boxId: "bnrBox",
+        items: [
+          { key: "A", barId: "bnrA_v", textId: "bnrA_t" },
+          { key: "B", barId: "bnrB_v", textId: "bnrB_t" },
+          { key: "C", barId: "bnrC_v", textId: "bnrC_t" },
+        ],
+      },
+      abc: {
+        boxId: "abcBox",
+        items: [
+          { key: "A", barId: "abcA_v", textId: "abcA_t" },
+          { key: "B", barId: "abcB_v", textId: "abcB_t" },
+          { key: "C", barId: "abcC_v", textId: "abcC_t" },
+        ],
+      },
+      yesno: {
+        boxId: "jnBox",
+        items: [
+          { key: "A", barId: "jnA_v", textId: "jnA_t" },
+          { key: "B", barId: "jnB_v", textId: "jnB_t" },
+        ],
+      },
+    };
+
+    // ====== Start ======
+    boot();
+
+    async function boot() {
+      if (!programId) {
+        showError("Mangler ?id=... i URL.");
+        return;
+      }
+
+      try {
+        const snap = await programsRef.doc(programId).get();
+        if (!snap.exists) {
+          showError("Opplegget finnes ikke.");
+          return;
+        }
+
+        program = { id: snap.id, ...snap.data() };
+        questions = normalizeQuestions(program.questions || []);
+        if (!questions.length) {
+          showError("Opplegget har ingen spørsmål ennå.");
+          return;
+        }
+
+        // Finn baseRound: hvis vi allerede kjører samme program, bruk den.
+        const stateSnap = await stateRef.get();
+        const d = stateSnap.exists ? (stateSnap.data() || {}) : {};
+        const existingBase = Number.isFinite(d.runBaseRound) ? d.runBaseRound : null;
+        const sameProgram = (d.programActive === true && d.programId === programId);
+
+        if (sameProgram && existingBase !== null) {
+          baseRound = existingBase;
+          qIdx = Number.isFinite(d.questionIndex) ? clamp(d.questionIndex, 0, questions.length - 1) : 0;
+        } else {
+          const current = Number.isFinite(d.round) ? d.round : 0;
+          baseRound = current + 1;
+          qIdx = 0;
+
+          await stateRef.set({
+            programActive: true,
+            programId: programId,
+            runBaseRound: baseRound,
+            questionIndex: 0,
+            questionCount: questions.length
+          }, { merge: true });
+        }
+
+        // Sett første/aktivt spørsmål (og sørg for “riktig round”)
+        await applyQuestion(qIdx, true);
+
+        // Start live listeners
+        attachStateListener();
+        attachPollListener();
+
+      } catch (err) {
+        showError("Kunne ikke laste opplegg:\n" + (err?.message || err));
+      }
+    }
+
+    function normalizeQuestions(qs) {
+      const out = (Array.isArray(qs) ? qs : []).map((q, idx) => {
+        const qq = q || {};
+        const mode = (qq.mode || "multi").toString();
+        return {
+          order: Number.isFinite(qq.order) ? qq.order : (idx + 1),
+          title: (qq.title || ("Spørsmål " + (idx + 1))).toString(),
+          mode
+        };
+      });
+      out.sort((a,b) => a.order - b.order);
+      return out;
+    }
+
+    function attachStateListener() {
+      stateRef.onSnapshot(doc => {
+        if (!doc.exists) return;
+        const d = doc.data() || {};
+
+        mode = d.mode ?? null;
+        showResultsFlag = d.showResults === true;
+        stateRound = d.round ?? 0;
+
+        // Sync idx hvis en annen fane styrer (valgfritt)
+        if (Number.isFinite(d.questionIndex) && questions.length) {
+          const maybe = clamp(d.questionIndex, 0, questions.length - 1);
+          if (maybe !== qIdx) qIdx = maybe;
+        }
+
+        updateTopLine();
+        updateNavButtons();
+
+        render();
+
+        if (mode === CONFIG.MODES.WORDCLOUD && showResultsFlag) requestWcRerender();
+
+        // Lytt på riktig answers-kolleksjon per “round”
+        const roundId = "round_" + stateRound;
+        if (mode === CONFIG.MODES.OPEN) attachOpenListener(roundId); else detachOpenListener();
+        if (mode === CONFIG.MODES.WORDCLOUD) attachWcListener(roundId); else detachWcListener();
+      });
+    }
+
+    function attachPollListener() {
+      pollRef.onSnapshot(doc => {
+        const d = doc.exists ? (doc.data() || {}) : {};
+        poll = {
+          A: d?.A || 0,
+          B: d?.B || 0,
+          C: d?.C || 0,
+          likertSum: d?.likertSum || 0,
+          likertCount: d?.likertCount || 0
+        };
+        render();
+      });
+    }
+
+    function updateTopLine() {
+      const q = questions[qIdx];
+      const total = questions.length;
+      const title = q ? q.title : "";
+      const pTitle = escapeHtml(program?.title || "Opplegg");
+      document.getElementById("pageTitle").textContent = pTitle;
+
+      document.getElementById("qLine").innerHTML =
+        `Spørsmål <b>${qIdx + 1}</b>/<b>${total}</b>: ${escapeHtml(title)}`;
+    }
+
+    function updateNavButtons() {
+      const prev = document.getElementById("prevBtn");
+      const next = document.getElementById("nextBtn");
+      prev.disabled = (qIdx <= 0);
+      next.disabled = (qIdx >= questions.length - 1);
+    }
+
+    function modeToConfigMode(m) {
+      // Editor bruker: multi, yesno, likert, open, wordcloud
+      // Resultat/innhenting bruker CONFIG.MODES: sbs, bnr, abc, yesno, likert, open, wordcloud
+      // Her tolker vi “multi” som “abc” (standard). Du kan endre til “sbs/bnr” hvis du vil.
+      if (m === "multi") return CONFIG.MODES.ABC;
+      if (m === "yesno") return CONFIG.MODES.YESNO;
+      if (m === "likert") return CONFIG.MODES.LIKERT;
+      if (m === "open") return CONFIG.MODES.OPEN;
+      if (m === "wordcloud") return CONFIG.MODES.WORDCLOUD;
+      return CONFIG.MODES.ABC;
+    }
+
+    async function applyQuestion(idx, keepResultsHidden) {
+      qIdx = clamp(idx, 0, questions.length - 1);
+
+      const q = questions[qIdx];
+      const newMode = modeToConfigMode(q.mode);
+
+      const roundForQuestion = (baseRound ?? 1) + qIdx;
+
+      // Reset teller-doc (for alle typer)
+      await pollRef.set({
+        A: 0, B: 0, C: 0,
+        likertSum: 0,
+        likertCount: 0
+      }, { merge: true });
+
+      // Sett state (styrer innhenting + resultater)
+      await stateRef.set({
+        mode: newMode,
+        showResults: keepResultsHidden ? false : showResultsFlag,
+        round: roundForQuestion,
+
+        // “program-kjøring” meta
+        programActive: true,
+        programId: programId,
+        runBaseRound: baseRound,
+        questionIndex: qIdx,
+        questionCount: questions.length,
+        questionTitle: q.title,
+
+        status: "collect",
+        ts: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      updateTopLine();
+      updateNavButtons();
+    }
+
+    // ====== Navigation ======
+    function nextQ() {
+      if (qIdx >= questions.length - 1) return;
+      applyQuestion(qIdx + 1, true);
+    }
+
+    function prevQ() {
+      if (qIdx <= 0) return;
+      applyQuestion(qIdx - 1, true);
+    }
+
+    // ====== Results view ======
+    function toggleResults() {
+      if (!mode) return;
+      stateRef.set({ showResults: !showResultsFlag }, { merge: true });
+      if (mode === CONFIG.MODES.WORDCLOUD) requestWcRerender();
+    }
+
+    // ====== Exit ======
+    async function goMenu(evt) {
+      if (evt) evt.preventDefault();
+
+      try {
+        await pollRef.set({
+          A: 0, B: 0, C: 0,
+          likertSum: 0,
+          likertCount: 0
+        }, { merge: true });
+
+        await stateRef.set({
+          mode: null,
+          showResults: false,
+          programActive: false,
+          status: "idle",
+          ts: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+      } catch (err) {
+        // Still gå ut
+      }
+
+      window.location.href = "hovedmeny.html";
+      return false;
+    }
+
+    // ====== OPEN ======
+    function detachOpenListener() {
+      if (openUnsub) { openUnsub(); openUnsub = null; }
+      openAnswers = [];
+    }
+
+    function attachOpenListener(roundId) {
+      if (openUnsub) return;
+      openAnswers = [];
+
+      openUnsub = db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
+        .doc(roundId)
+        .collection("answers")
+        .orderBy("ts", "asc")
+        .onSnapshot(snap => {
+          openAnswers = snap.docs.map(x => x.data());
+          render();
+        });
+    }
+
+    // ====== WORDCLOUD ======
+    function detachWcListener() {
+      if (wcUnsub) { wcUnsub(); wcUnsub = null; }
+      wcAnswersCount = 0;
+      wcFreq = new Map();
+      wcLastSignature = "";
+      const stage = document.getElementById("wcStage");
+      if (stage) stage.innerHTML = "";
+    }
+
+    function attachWcListener(roundId) {
+      if (wcUnsub) return;
+      wcAnswersCount = 0;
+      wcFreq = new Map();
+      wcLastSignature = "";
+
+      wcUnsub = db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
+        .doc(roundId)
+        .collection("answers")
+        .orderBy("ts", "asc")
+        .onSnapshot(snap => {
+          wcAnswersCount = snap.size;
+
+          const m = new Map();
+          snap.docs.forEach(doc => {
+            const data = doc.data() || {};
+            const words = Array.isArray(data.words) ? data.words : [];
+            words.forEach(w => {
+              const key = (w || "").toString();
+              if (!key) return;
+              m.set(key, (m.get(key) || 0) + 1);
+            });
+          });
+
+          wcFreq = m;
+          render();
+        });
+    }
+
+    function render() {
+      const count =
+        (mode === CONFIG.MODES.LIKERT)
+          ? (poll.likertCount || 0)
+          : (mode === CONFIG.MODES.OPEN)
+            ? (openAnswers.length || 0)
+            : (mode === CONFIG.MODES.WORDCLOUD)
+              ? (wcAnswersCount || 0)
+              : (poll.A + poll.B + poll.C);
+
+      // Vi bruker qLine som “Spørsmål 3/12: …” allerede,
+      // så totalCount-feltet gjenbrukes ikke her. Men du kan lett legge det til igjen om du vil.
+      // For nå: vis count i tittellinja på show-knappen (litt “kjapp feedback”)
+      const showBtn = document.getElementById("showBtn");
+      showBtn.disabled = !mode;
+      showBtn.textContent = showResultsFlag ? `Skjul resultater (${count})` : `Vis resultater (${count})`;
+
+      document.querySelector(".page")
+        .classList.toggle("collecting", (!mode || !showResultsFlag));
+
+      hideAll();
+
+      if (!mode || !showResultsFlag) {
+        show("collectBox");
+        return;
+      }
+
+      show("resultsBox");
+
+      if (mode === CONFIG.MODES.LIKERT) {
+        show("likertBox");
+        renderLikert(poll.likertSum || 0, poll.likertCount || 0);
+        return;
+      }
+
+      if (mode === CONFIG.MODES.OPEN) {
+        show("openResBox");
+        renderOpenList();
+        return;
+      }
+
+      if (mode === CONFIG.MODES.WORDCLOUD) {
+        show("wcResBox");
+        renderWordCloud();
+        return;
+      }
+
+      const cfg = charts[mode];
+      if (!cfg) return;
+
+      const total = poll.A + poll.B + poll.C;
+      show(cfg.boxId);
+
+      cfg.items.forEach(it => {
+        updateVBar(it.barId, it.textId, poll[it.key] || 0, total);
+      });
+    }
+
+    function updateVBar(barId, textId, value, total) {
+      const bar = document.getElementById(barId);
+      const txt = document.getElementById(textId);
+      if (!bar || !txt) return;
+
+      const p = total ? Math.round((value / total) * 100) : 0;
+      bar.style.height = p + "%";
+      txt.textContent = p + " % (" + value + ")";
+    }
+
+    function renderLikert(sum, count) {
+      const avg = count ? (sum / count) : 0;
+      const clamped = Math.max(0, Math.min(10, avg));
+      const pct = (clamped / 10) * 100;
+
+      document.getElementById("likertAvg").textContent = avg.toFixed(1);
+      document.getElementById("likertN").textContent = count;
+      document.getElementById("likertFill").style.width = pct + "%";
+    }
+
+    function renderOpenList() {
+      const list = document.getElementById("openList");
+      if (!list) return;
+
+      if (!openAnswers.length) {
+        list.innerHTML = "<div class='openEmpty'>" + escapeHtml(CONFIG.TEXT.NO_ANSWERS_YET) + "</div>";
+        return;
+      }
+
+      list.innerHTML = openAnswers.map(a => {
+        const text = escapeHtml(a.text || "");
+        return `<div class="openItem">${text}</div>`;
+      }).join("");
+    }
+
+    function getInnerSize(el) {
+      const rect = el.getBoundingClientRect();
+      const cs = window.getComputedStyle(el);
+
+      const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+
+      const w = Math.max(320, Math.floor(rect.width - padX));
+      const h = Math.max(240, Math.floor(rect.height - padY));
+
+      return { w, h };
+    }
+
+    function renderWordCloud() {
+      const stage = document.getElementById("wcStage");
+      if (!stage) return;
+
+      const entries = Array.from(wcFreq.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      const signature = entries.map(([w, c]) => w + ":" + c).join("|");
+      if (signature === wcLastSignature) return;
+      wcLastSignature = signature;
+
+      stage.innerHTML = "";
+
+      if (!entries.length) {
+        stage.innerHTML = "<div class='results-empty'>"
+          + escapeHtml(CONFIG.TEXT.NO_WORDS_YET)
+          + "</div>";
+        return;
+      }
+
+      const { w: width, h: height } = getInnerSize(stage);
+
+      const counts = entries.map(e => e[1]);
+      const minC = Math.min(...counts);
+      const maxC = Math.max(...counts);
+
+      const scale = (c) => {
+        if (minC === maxC) return CONFIG.WORDCLOUD.FONT_IF_SINGLE_VALUE;
+        return CONFIG.WORDCLOUD.FONT_MIN
+          + ((c - minC) / (maxC - minC)) * (CONFIG.WORDCLOUD.FONT_MAX - CONFIG.WORDCLOUD.FONT_MIN);
+      };
+
+      const words = entries.map(([text, count]) => ({
+        text,
+        count,
+        size: scale(count)
+      }));
+
+      const svg = d3.select(stage)
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+      const g = svg.append("g")
+        .attr("transform", "translate(" + (width / 2) + "," + (height / 2) + ")");
+
+      d3.layout.cloud()
+        .size([width, height])
+        .words(words)
+        .padding(3)
+        .rotate(() => (Math.random() < CONFIG.WORDCLOUD.ROTATE_PROBABILITY ? 90 : 0))
+        .font(CONFIG.WORDCLOUD.FONT)
+        .fontSize(d => d.size)
+        .on("end", draw)
+        .start();
+
+      function draw(layoutWords) {
+        g.selectAll("text")
+          .data(layoutWords)
+          .enter()
+          .append("text")
+          .style("font-family", CONFIG.WORDCLOUD.FONT)
+          .style("font-size", d => d.size + "px")
+          .style("font-weight", CONFIG.WORDCLOUD.FONT_WEIGHT)
+          .style("fill", CONFIG.WORDCLOUD.FILL)
+          .attr("text-anchor", "middle")
+          .attr("transform", d => "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")")
+          .text(d => d.text);
+      }
+    }
+
+    // ====== Hotkeys ======
+    document.addEventListener("keydown", (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+
+      if (e.key === "ArrowRight") { e.preventDefault(); nextQ(); return; }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); prevQ(); return; }
+
+      const key = (e.key || "").toLowerCase();
+
+      if ((key === "v" || e.code === "Space") && mode) {
+        e.preventDefault();
+        toggleResults();
+        return;
+      }
+
+      if (key === (CONFIG.HOTKEYS?.RESULTS?.MENU_KEY || "h")) {
+        e.preventDefault();
+        goMenu(null);
+        return;
+      }
+    });
+
+    // ====== Helpers ======
+    function hideAll() {
+      ["collectBox", "resultsBox", "sbsBox", "bnrBox", "abcBox", "jnBox", "likertBox", "openResBox", "wcResBox"]
+        .forEach(hide);
+    }
+
+    function show(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove("hidden");
+    }
+
+    function hide(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.add("hidden");
+    }
+
+    function escapeHtml(s) {
+      return (s || "")
+        .toString()
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function showError(text) {
+      const box = document.getElementById("errorBox");
+      box.style.display = "block";
+      box.textContent = text;
+    }
+
+    function clamp(n, a, b) {
+      return Math.max(a, Math.min(b, n));
+    }
+  </script>
+</body>
+</html>

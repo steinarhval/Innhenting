@@ -34,7 +34,7 @@
 
     // URL-er (QR-lenke)
     URLS: {
-      QR_TARGET: "https://steinarhval.github.io/Innhenting/Innhenting.html",
+      QR_TARGET: "https://steinarhval.github.io/Innhenting/innhenting.html",
     },
 
     LIMITS: {

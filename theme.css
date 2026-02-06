@@ -305,6 +305,76 @@ textarea{
   white-space: pre-wrap;
   text-align: left;
 }
+/* =========================================================
+   AUTH / LOGIN SCREEN (admin)
+   ========================================================= */
+.auth-page{
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--wrap-pad);
+}
+
+.auth-card{
+  width: 100%;
+  max-width: 520px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
+  padding: 1.25rem 1.25rem 1.1rem;
+  text-align: center;
+}
+
+.auth-title{
+  font-size: var(--text-xl);
+  font-weight: 950;
+  margin: 0 0 10px;
+}
+
+.auth-sub{
+  margin: 0 0 18px;
+  color: var(--color-text-muted);
+  opacity: 0.9;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.auth-actions{
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* Liten topbar for admin (valgfri) */
+.topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+.userBadge{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  color: var(--color-text-muted);
+  opacity: 0.95;
+}
+
+.userBadge img{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+}
+
 
 /* =========================================================
    SMÅTEKST / HJELP / TITLER
