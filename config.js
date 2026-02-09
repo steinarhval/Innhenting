@@ -117,3 +117,4 @@
   window.CONFIG = CONFIG;
   window.FirebaseUtil = { initFirebaseOnce, getRefs };
 })();
+
