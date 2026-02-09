@@ -124,20 +124,28 @@
       return (now - lastPresenterMs) <= CONFIG.PRESENCE.TIMEOUT_MS;
     }
 
-    function applyPresenterGate() {
-      const ok = presenterOk();
+function applyPresenterGate() {
+  const ok = presenterOk();
 
-      if (!ok) {
-        // Tving standby
-        hideAll();
-        waitingBox.classList.remove("hidden");
-        setMsg("");
-        setAllInputsDisabled(true);
-      } else {
-        // Når foreleser er tilbake, lar vi stateRef styre UI
-        setAllInputsDisabled(false);
-      }
-    }
+  // 1) Foreleser borte -> hard standby + lås alt
+  if (!ok) {
+    hideAll();
+    waitingBox.classList.remove("hidden");
+    setMsg("");
+    setAllInputsDisabled(true);
+    return;
+  }
+
+  // 2) Foreleser tilbake:
+  // - hvis brukeren allerede har stemt: hold fryst (disable) og behold takk-melding
+  // - hvis ikke stemt: enable
+  if (hasVoted) {
+    freezeVotedUI(true);
+  } else {
+    freezeVotedUI(false);
+  }
+}
+
 
     if (presenceRef) {
       presenceRef.onSnapshot(snap => {
@@ -193,6 +201,25 @@
         if (!box) return;
         box.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
       });
+function freezeVotedUI(freeze) {
+  // "freeze" betyr: disable det aktive (ikke nødvendigvis alt på siden)
+  if (freeze) {
+    disableActiveChoiceButtons(true);
+    // Likert: disable alle knapper
+    document.querySelectorAll(".likert-btn").forEach(b => b.disabled = true);
+    // Open/WC
+    setOpenDisabled(true);
+    setWcDisabled(true);
+  } else {
+    // Ikke enable hvis foreleser er borte
+    if (!presenterOk()) return;
+
+    disableActiveChoiceButtons(false);
+    document.querySelectorAll(".likert-btn").forEach(b => b.disabled = false);
+    setOpenDisabled(false);
+    setWcDisabled(false);
+  }
+}
 
       // Likert
       document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
@@ -249,6 +276,10 @@
         hasVoted = false;
         resetUI();
       }
+// ... i resetUI()
+hasVoted = false; // (du setter allerede hasVoted=false ved mode/round-skifte, men dette er trygt)
+freezeVotedUI(false);
+applyPresenterGate();
 
       render();
     });
@@ -472,3 +503,4 @@
   </script>
 </body>
 </html>
+
