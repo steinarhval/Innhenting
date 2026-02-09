@@ -14,6 +14,9 @@
   --color-surface-soft: #F3F3F3;
   --color-page-soft: #FAFAFA;
 
+  /* Felles rød (skal brukes konsekvent) */
+  --red-core: #9C3D38;
+
   /* Tekst */
   --color-text-main: #1E1E1E;
   --color-text-muted: #555555;
@@ -28,20 +31,88 @@
   /* Aksent */
   --color-accent: #C9A24D;
 
-  /* Status / semantikk */
+  /* Status / semantikk (generelt) */
   --color-success: #2E7D32;
   --color-warning: #F9A825;
-  --color-danger:  #C62828;
-  --color-info:    #00416A;
+  --color-danger: var(--red-core); /* nå samme rødfarge som core */
+  --color-info: #00416A;
 
   /* Linjer */
   --color-border: #D6D9DC;
   --color-divider: #E3E6E8;
 
-  /* SBS (trafikklys) */
+  /* SBS (trafikklys) – kun for SBS/BNR-modus */
   --sbs-green:  #4F8A6D; /* Sunn */
   --sbs-yellow: #C9A24D; /* Bekymringsfull */
-  --sbs-red:    #9C3D38; /* Skadelig */
+  --sbs-orange: #E38B2D;
+  --sbs-red:    var(--red-core); /* Skadelig */
+
+  /* =========================================================
+     UI-PALETT (ikke trafikklys)
+     Brukes på knapper og admin-UI
+     ========================================================= */
+  --ui-primary:        #1F4E5F;
+  --ui-primary-hover:  #173F4D;
+  --ui-primary-fg:     #FFFFFF;
+
+  --ui-secondary:        #5F7D8A;
+  --ui-secondary-hover:  #4F6A75;
+  --ui-secondary-fg:     #FFFFFF;
+
+  --ui-neutral:        #E4E7EA;
+  --ui-neutral-hover:  #D8DDE1;
+  --ui-neutral-fg:     #1E1E1E;
+
+  --ui-nav-bg:        var(--ui-secondary);
+  --ui-nav-hover:     var(--ui-secondary-hover);
+  --ui-nav-fg:        #FFFFFF;
+
+  /* Destructive (skal matche core rød) */
+  --ui-danger:        var(--red-core);
+  --ui-danger-hover:  color-mix(in srgb, var(--red-core) 85%, #000 15%);
+  --ui-danger-fg:     #FFFFFF;
+
+  /* =========================================================
+     PRESETS for opplegg-editor
+     ========================================================= */
+  --preset-traffic-1: var(--sbs-green);
+  --preset-traffic-2: var(--sbs-yellow);
+  --preset-traffic-3: var(--sbs-red);
+--preset-traffic-4: var(--sbs-orange);
+
+
+  --preset-blue-1: var(--ui-primary);
+  --preset-blue-2: var(--ui-secondary);
+  --preset-blue-3: color-mix(in srgb, var(--ui-secondary) 25%, #fff 75%);
+
+/* Nordisk – 5 ankre (mørk petrol -> blågrå -> lys tåke) */
+--preset-nordic-1: #0E2F3A;  /* veldig mørk petrol */
+--preset-nordic-2: #1F4E5F;  /* din ui-primary */
+--preset-nordic-3: #4F7C8A;  /* din secondary */
+--preset-nordic-4: #8FB3BE;  /* lys, “kysttåke” */
+--preset-nordic-5: #D9E7EC;  /* veldig lys */
+
+
+
+/* Grå – 5 ankre (stor forskjell mellom valgene) */
+--preset-gray-1: #111111;
+--preset-gray-2: #333333;
+--preset-gray-3: #666666;
+--preset-gray-4: #B9C0C6;  /* lys stålgrå */
+--preset-gray-5: #E6EAED;  /* veldig lys */
+
+
+/* Rosa – 5 ankre (ikke Barbie, men tydeligere trinn) */
+--preset-pink-1: #4B1E31;  /* dyp vin */
+--preset-pink-2: #7A3B57;  /* din pink-1 */
+--preset-pink-3: #A65A7C;  /* din pink-2 */
+--preset-pink-4: #D08FA9;  /* lys rose */
+--preset-pink-5: #F2D7E2;  /* veldig lys blush */
+
+
+  /* Ja/nei i opplegg-editor (ikke “statusfarger”) */
+  --yn-yes-bg: var(--ui-primary);
+  --yn-no-bg:  var(--ui-danger);
 
   /* Nøytrale UI-farger */
   --color-ui-50:  #FAFAFA;
@@ -54,7 +125,7 @@
   --color-ui-500: #9E9E9E;
   --color-ui-700: #424242;
 
-  /* Knapper */
+  /* Knapper (generelle tokens) */
   --color-btn-ghost-bg: var(--color-surface);
   --color-btn-ghost-fg: var(--color-text-main);
   --color-btn-ghost-hover-filter: 0.95;
@@ -63,12 +134,22 @@
   --color-btn-show-fg: var(--color-surface);
   --color-btn-show-hover-bg: color-mix(in srgb, var(--color-secondary) 55%, #000 45%);
 
+  /* (Legacy) beholdes for kompatibilitet */
   --color-btn-danger-bg: var(--sbs-red);
   --color-btn-danger-fg: var(--color-surface);
   --color-btn-danger-hover-bg: color-mix(in srgb, var(--sbs-red) 85%, #000 15%);
 
   --color-btn-success-bg: var(--sbs-green);
   --color-btn-success-fg: var(--color-surface);
+
+  /* Program-knapper (opplegg) – legacy */
+  --color-btn-edit-bg: var(--sbs-yellow);
+  --color-btn-edit-fg: #111;
+  --color-btn-edit-hover-filter: 0.98;
+
+  --color-btn-dup-bg: var(--sbs-orange);
+  --color-btn-dup-fg: #111;
+  --color-btn-dup-hover-filter: 0.98;
 
   /* Komponenter */
   --color-card-border: var(--color-divider);
@@ -206,6 +287,34 @@ textarea:focus-visible{
   margin: 12px 0;
 }
 
+/* Resultater – antall og modus */
+.total {
+  text-align: center;
+  margin-bottom: 1.2rem;
+}
+
+/* Resultater – dynamisk overskrift */
+.resultsTitle {
+  text-align: center;
+  font-size: 1.45rem;
+  opacity: .9;
+  font-weight: 500;
+  margin-bottom: .6rem;
+  letter-spacing: .02em;
+}
+
+.totalCount {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.totalMode {
+  margin-top: .15rem;
+  font-size: .8rem;
+  opacity: .65;
+  letter-spacing: .04em;
+}
+
 /* =========================================================
    FELLES UI-KOMPONENTER
    ========================================================= */
@@ -218,12 +327,39 @@ textarea:focus-visible{
   font-weight: 800;
   transition: background-color 0.15s ease, transform 0.1s ease, filter 0.15s ease;
 }
-
 .btn:active{ transform: translateY(var(--active-shift)); }
 
 .btn[disabled]{
   opacity: 0.55;
   cursor: default;
+}
+
+/* Nye "rene" UI-varianter */
+.btn--primary{
+  background: var(--ui-primary);
+  color: var(--ui-primary-fg);
+}
+.btn--primary:hover{ background: var(--ui-primary-hover); }
+
+.btn--secondary{
+  background: var(--ui-secondary);
+  color: var(--ui-secondary-fg);
+}
+.btn--secondary:hover{ background: var(--ui-secondary-hover); }
+
+.btn--neutral{
+  background: var(--ui-neutral);
+  color: var(--ui-neutral-fg);
+}
+.btn--neutral:hover{ background: var(--ui-neutral-hover); }
+
+.btn--nav{
+  background: var(--ui-nav-bg);
+  color: var(--ui-nav-fg);
+  font-weight: 700;
+}
+.btn--nav:hover{
+  background: var(--ui-nav-hover);
 }
 
 .btn--ghost{
@@ -238,17 +374,42 @@ textarea:focus-visible{
 }
 .btn--show:hover{ background: var(--color-btn-show-hover-bg); }
 
-.btn--danger{
-  background: var(--color-btn-danger-bg);
-  color: var(--color-btn-danger-fg);
-}
-.btn--danger:hover{ background: var(--color-btn-danger-hover-bg); }
+/* =========================================================
+   BACKWARD COMPAT: gamle navn, ny UI-palett
+   ========================================================= */
 
+/* "success" = primær handling (ikke grønn) */
 .btn--success{
-  background: var(--color-btn-success-bg);
-  color: var(--color-btn-success-fg);
+  background: var(--ui-primary);
+  color: var(--ui-primary-fg);
 }
-.btn--success:hover{ filter: brightness(var(--hover-brightness)); }
+.btn--success:hover{ background: var(--ui-primary-hover); }
+
+/* "edit" = sekundær */
+.btn--edit{
+  background: var(--ui-secondary);
+  color: var(--ui-secondary-fg);
+  border-color: transparent;
+  font-weight: 650;
+}
+.btn--edit:hover{ background: var(--ui-secondary-hover); }
+
+/* "dup" = nøytral */
+.btn--dup{
+  background: var(--ui-neutral);
+  color: var(--ui-neutral-fg);
+  border-color: transparent;
+  font-weight: 650;
+}
+.btn--dup:hover{ background: var(--ui-neutral-hover); }
+.btn--dup:active{ filter: brightness(0.98); }
+
+/* "danger" = core rød + hover */
+.btn--danger{
+  background: var(--ui-danger);
+  color: var(--ui-danger-fg);
+}
+.btn--danger:hover{ background: var(--ui-danger-hover); }
 
 .btn--compact{
   width: auto !important;
@@ -305,6 +466,7 @@ textarea{
   white-space: pre-wrap;
   text-align: left;
 }
+
 /* =========================================================
    AUTH / LOGIN SCREEN (admin)
    ========================================================= */
@@ -375,7 +537,6 @@ textarea{
   border: 1px solid rgba(0,0,0,0.10);
 }
 
-
 /* =========================================================
    SMÅTEKST / HJELP / TITLER
    ========================================================= */
@@ -408,6 +569,15 @@ textarea{
   margin-bottom: 8px;
 }
 .sectionTitle--tight{ margin-bottom: 6px; }
+
+/* Inline hint */
+.inline-hint{
+  font-size: 0.9rem;
+  opacity: 0.85;
+  margin-left: 0.75rem;
+  white-space: nowrap;
+}
+.inline-hint.hidden{ display:none; }
 
 /* =========================================================
    PILLS (preview + dynamiske farger)
@@ -594,10 +764,10 @@ body.collect .box-wrap{
   text-align: left;
 }
 
-/* Mer luft mellom tekstfelt og raden med knapp/teller (open/wordcloud) */
+/* Luft mellom tekstfelt og rad med knapp/teller */
 body.collect .box-wrap textarea + .row,
 body.collect .box-wrap .wc-grid + .row{
-  margin-top: 14px; /* juster 12–18px ved behov */
+  margin-top: 14px;
 }
 
 body.collect .label{
@@ -865,7 +1035,7 @@ body.results .bottom-bar{
   justify-content: space-around;
   align-items: flex-end;
   margin-top: auto;
-  padding: 0 20px var(--bottom-pad);
+  padding: 0 20px 20px;
   z-index: 20;
 }
 
@@ -909,6 +1079,34 @@ body.results .results-empty{
   opacity: 0.8;
 }
 
+/* Resultater: hurtigtast-hint nederst */
+.hotkey-hint{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.6rem 1rem;
+  align-items:center;
+  justify-content:center;
+  font-size:.85rem;
+  opacity:.85;
+  user-select:none;
+}
+
+.hotkey-hint .hkKey{
+  display:inline-block;
+  padding:.08rem .35rem;
+  border-radius:.45rem;
+  border:1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  color: var(--color-accent);
+  font-weight:600;
+  letter-spacing:.02em;
+}
+
+.hotkey-hint .hkMode{
+  opacity:.9;
+  margin-left:.25rem;
+}
+
 /* =========================================================
    SIDE: OPPLEGG LISTE (body.programs)
    ========================================================= */
@@ -923,7 +1121,7 @@ body.programs .toggleRow{
   gap: 10px;
   align-items: center;
   margin: 12px 0 18px;
-  font-weight: 700;
+  font-weight: 650;
   color: var(--color-text-muted);
 }
 
@@ -938,27 +1136,29 @@ body.programs .cardTop{
 
 body.programs .cardTitle{
   margin: 0;
-  font-weight: 950;
-  font-size: 1.15rem;
+  font-weight: 850;
+  font-size: 1.08rem;
+  letter-spacing: 0.01em;
 }
 
 body.programs .cardMeta{
   margin-top: 6px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text-muted);
   opacity: 0.9;
+  font-size: 0.95rem;
 }
 
 body.programs .actions{
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 body.programs .btn.small{
-  padding: 0.6rem 0.9rem;
-  font-size: 0.95rem;
-  font-weight: 900;
+  padding: 0.52rem 0.78rem;
+  font-size: 0.92rem;
+  font-weight: 800;
 }
 
 /* =========================================================
@@ -1028,22 +1228,37 @@ body.program-edit .optionsWrap{
   margin-top: 8px;
 }
 
+/* Fast bredde for label-input i svaralternativer */
+body.program-edit{
+  --opt-label-w: 380px; /* juster fritt: 340–420 pleier å være sweet spot */
+}
+
 body.program-edit .optRow{
   display: grid;
-  grid-template-columns: 1fr 58px auto 52px;
+  grid-template-columns: var(--opt-label-w) 58px auto 52px; /* label | color | dupliser | minus */
   gap: 10px;
   align-items: center;
   margin: 10px 0;
 }
 
+/* På smal skjerm: stack dupliser under */
 @media (max-width: 620px){
   body.program-edit .optRow{
     grid-template-columns: 1fr 58px;
     grid-auto-rows: auto;
   }
-  body.program-edit .optRow .pill{ grid-column: 1 / -1; }
-  body.program-edit .optRow .btn{ grid-column: 2 / 3; justify-self: end; }
+
+  body.program-edit .optRow .optDupBtn{
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  body.program-edit .optRow .btn--danger{
+    grid-column: 2 / 3;
+    justify-self: end;
+  }
 }
+
 
 body.program-edit input[type="color"]{
   width: 58px;
@@ -1064,6 +1279,51 @@ body.program-edit .addOptRow{
   margin-top: 10px;
 }
 
+/* =========================================================
+   OPPLEGG EDIT: Accordion
+   ========================================================= */
+body.program-edit details.qAcc{
+  background: var(--color-surface);
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-1);
+  margin: 0.7rem 0;
+  overflow: hidden;
+}
+
+body.program-edit details.qAcc > summary{
+  list-style: none;
+  cursor: pointer;
+  padding: 0.95rem 1rem;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  user-select: none;
+}
+
+body.program-edit details.qAcc > summary::-webkit-details-marker{ display:none; }
+
+body.program-edit details.qAcc > summary:hover{
+  background: color-mix(in srgb, var(--color-ui-100) 70%, transparent 30%);
+}
+
+body.program-edit .qAccNum{
+  font-weight: 950;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+body.program-edit .qAccTitle{
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+body.program-edit .qAccBody{
+  padding: 0 1rem 1rem;
+}
+
+body.program-edit details.qAcc:not([open]) .qAccBody{ display:none; }
+
 /* Sticky bar nederst */
 .stickyBar{
   position: sticky;
@@ -1078,4 +1338,4 @@ body.program-edit .addOptRow{
   justify-content: flex-end;
   flex-wrap: wrap;
 }
-
+preset
