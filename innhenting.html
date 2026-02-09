@@ -111,57 +111,7 @@
     let round = null;
     let hasVoted = false;
 
-    // -------------------------
-    // Presenter gate (presence)
-    // -------------------------
-    let presenterAliveFlag = true; // d.alive !== false
-    let lastPresenterMs = 0;       // d.ts
-
-    function presenterOk() {
-      const now = Date.now();
-      if (!presenterAliveFlag) return false;
-      if (!lastPresenterMs) return false;
-      return (now - lastPresenterMs) <= CONFIG.PRESENCE.TIMEOUT_MS;
-    }
-
-function applyPresenterGate() {
-  const ok = presenterOk();
-
-  // 1) Foreleser borte -> hard standby + lås alt
-  if (!ok) {
-    hideAll();
-    waitingBox.classList.remove("hidden");
-    setMsg("");
-    setAllInputsDisabled(true);
-    return;
-  }
-
-  // 2) Foreleser tilbake:
-  // - hvis brukeren allerede har stemt: hold fryst (disable) og behold takk-melding
-  // - hvis ikke stemt: enable
-  if (hasVoted) {
-    freezeVotedUI(true);
-  } else {
-    freezeVotedUI(false);
-  }
-}
-
-
-    if (presenceRef) {
-      presenceRef.onSnapshot(snap => {
-        const d = snap.exists ? snap.data() : {};
-        presenterAliveFlag = (d?.alive !== false);
-        lastPresenterMs = d?.ts?.toMillis ? d.ts.toMillis() : 0;
-        applyPresenterGate();
-      });
-    }
-
-    // Timeout må tikke selv om presence-doc ikke endrer seg
-    setInterval(applyPresenterGate, 1000);
-
-    // -------------------------
     // DOM refs
-    // -------------------------
     const waitingBox = document.getElementById("waitingBox");
     const msgEl = document.getElementById("msg");
     const likertGrid = document.getElementById("likertGrid");
@@ -177,6 +127,53 @@ function applyPresenterGate() {
 
     const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
 
+    // -------------------------
+    // Presenter gate (presence)
+    // -------------------------
+    let presenterAliveFlag = true;
+    let lastPresenterMs = 0;
+
+    function presenterOk() {
+      const now = Date.now();
+      if (!presenterAliveFlag) return false;
+      if (!lastPresenterMs) return false;
+      return (now - lastPresenterMs) <= CONFIG.PRESENCE.TIMEOUT_MS;
+    }
+
+    if (presenceRef) {
+      presenceRef.onSnapshot(snap => {
+        const d = snap.exists ? snap.data() : {};
+        presenterAliveFlag = (d?.alive !== false);
+        lastPresenterMs = d?.ts?.toMillis ? d.ts.toMillis() : 0;
+        applyPresenterGate();
+      });
+    }
+    setInterval(() => applyPresenterGate(), 1000);
+
+    function applyPresenterGate() {
+      const ok = presenterOk();
+
+      if (!ok) {
+        hideAll();
+        waitingBox.classList.remove("hidden");
+        setMsg("");
+        setAllInputsDisabled(true);
+        return;
+      }
+
+      // Presenter ok:
+      // - har stemt: hold fryst
+      // - ikke stemt: enable
+      if (hasVoted) freezeVotedUI(true);
+      else freezeVotedUI(false);
+
+      // Render det siste vi vet om mode/round
+      render();
+    }
+
+    // -------------------------
+    // UI helpers
+    // -------------------------
     if (openText && openCount) {
       openText.addEventListener("input", () => {
         openCount.textContent = (openText.value.length || 0) + " / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
@@ -184,55 +181,45 @@ function applyPresenterGate() {
     }
 
     function setOpenDisabled(disabled) {
-      if (!openText || !openSendBtn) return;
-      openText.disabled = disabled;
-      openSendBtn.disabled = disabled;
+      if (openText) openText.disabled = disabled;
+      if (openSendBtn) openSendBtn.disabled = disabled;
     }
 
     function setWcDisabled(disabled) {
-      [wc1,wc2,wc3].forEach(x => { if (x) x.disabled = disabled; });
+      [wc1, wc2, wc3].forEach(x => { if (x) x.disabled = disabled; });
       if (wcSendBtn) wcSendBtn.disabled = disabled;
     }
 
     function setAllInputsDisabled(disabled) {
-      // Choice buttons
       ["sbsBox","bnrBox","abcBox","jnBox"].forEach(id => {
         const box = document.getElementById(id);
         if (!box) return;
         box.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
       });
-function freezeVotedUI(freeze) {
-  // "freeze" betyr: disable det aktive (ikke nødvendigvis alt på siden)
-  if (freeze) {
-    disableActiveChoiceButtons(true);
-    // Likert: disable alle knapper
-    document.querySelectorAll(".likert-btn").forEach(b => b.disabled = true);
-    // Open/WC
-    setOpenDisabled(true);
-    setWcDisabled(true);
-  } else {
-    // Ikke enable hvis foreleser er borte
-    if (!presenterOk()) return;
 
-    disableActiveChoiceButtons(false);
-    document.querySelectorAll(".likert-btn").forEach(b => b.disabled = false);
-    setOpenDisabled(false);
-    setWcDisabled(false);
-  }
-}
-
-      // Likert
       document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
-
-      // Open + wordcloud
       setOpenDisabled(disabled);
       setWcDisabled(disabled);
+    }
+
+    function freezeVotedUI(freeze) {
+      if (freeze) {
+        disableActiveChoiceButtons(true);
+        document.querySelectorAll(".likert-btn").forEach(b => b.disabled = true);
+        setOpenDisabled(true);
+        setWcDisabled(true);
+      } else {
+        if (!presenterOk()) return;
+        disableActiveChoiceButtons(false);
+        document.querySelectorAll(".likert-btn").forEach(b => b.disabled = false);
+        setOpenDisabled(false);
+        setWcDisabled(false);
+      }
     }
 
     function sanitizeWord(raw) {
       const s = (raw || "").toLowerCase().trim();
       if (!s) return "";
-
       let cleaned = s.replace(/[^a-zæøå\-]/g, "");
       cleaned = cleaned.replace(/^\-+|\-+$/g, "");
       if (!cleaned) return "";
@@ -241,8 +228,8 @@ function freezeVotedUI(freeze) {
       return cleaned;
     }
 
+    // Likert buttons
     buildLikertButtons();
-
     function buildLikertButtons() {
       if (!likertGrid) return;
       likertGrid.innerHTML = "";
@@ -256,38 +243,41 @@ function freezeVotedUI(freeze) {
       }
     }
 
+    // -------------------------
+    // State listener
+    // -------------------------
     stateRef.onSnapshot(doc => {
       if (!doc.exists) return;
-
-      // Hvis foreleser er "borte", ignorer state og stå i standby
-      if (!presenterOk()) {
-        applyPresenterGate();
-        return;
-      }
-
       const d = doc.data();
 
       const newMode = d.mode ?? null;
       const newRound = d.round ?? null;
 
-      if (newMode !== mode || newRound !== round) {
-        mode = newMode;
-        round = newRound;
+      const changed = (newMode !== mode || newRound !== round);
+
+      mode = newMode;
+      round = newRound;
+
+      if (changed) {
         hasVoted = false;
         resetUI();
       }
-// ... i resetUI()
-hasVoted = false; // (du setter allerede hasVoted=false ved mode/round-skifte, men dette er trygt)
-freezeVotedUI(false);
-applyPresenterGate();
 
-      render();
+      // Ikke tving render hvis presenter er borte; gate styrer visning
+      if (presenterOk()) {
+        render();
+        applyPresenterGate();
+      } else {
+        applyPresenterGate();
+      }
     });
 
+    // -------------------------
+    // Render
+    // -------------------------
     function render() {
       hideAll();
 
-      // Foreleser borte? -> standby
       if (!presenterOk()) {
         waitingBox.classList.remove("hidden");
         setMsg("");
@@ -296,7 +286,7 @@ applyPresenterGate();
 
       if (!mode) {
         waitingBox.classList.remove("hidden");
-        setMsg("");
+        if (!hasVoted) setMsg("");
         return;
       }
 
@@ -326,12 +316,56 @@ applyPresenterGate();
       return null;
     }
 
+    function disableActiveChoiceButtons(disable) {
+      const box = getActiveBoxElement();
+      if (!box) return;
+      box.querySelectorAll("button.choice").forEach(b => b.disabled = disable);
+    }
+
+    function lockLikertButtons(selectedBtn) {
+      document.querySelectorAll(".likert-btn").forEach(b => {
+        b.disabled = true;
+        b.classList.add("disabled");
+        if (b === selectedBtn) b.classList.add("selected");
+      });
+    }
+
+    function unlockLikertButtons() {
+      if (!presenterOk()) return;
+      document.querySelectorAll(".likert-btn").forEach(b => {
+        b.disabled = false;
+        b.classList.remove("disabled", "selected");
+      });
+    }
+
+    function resetUI() {
+      if (openText && openCount) {
+        openText.value = "";
+        openCount.textContent = "0 / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
+      }
+      if (wc1) wc1.value = "";
+      if (wc2) wc2.value = "";
+      if (wc3) wc3.value = "";
+
+      setOpenDisabled(false);
+      setWcDisabled(false);
+      disableActiveChoiceButtons(false);
+      unlockLikertButtons();
+
+      // respekter gate umiddelbart
+      if (presenterOk()) freezeVotedUI(false);
+      else applyPresenterGate();
+    }
+
+    // -------------------------
+    // Actions
+    // -------------------------
     async function voteABC(option) {
       if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
       hasVoted = true;
-      disableActiveChoiceButtons(true);
+      freezeVotedUI(true);
 
       try {
         await pollRef.set(
@@ -341,7 +375,7 @@ applyPresenterGate();
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
-        disableActiveChoiceButtons(false);
+        freezeVotedUI(false);
         setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
@@ -372,17 +406,13 @@ applyPresenterGate();
       if (hasVoted) return;
 
       const text = (openText?.value || "").trim();
-      if (!text) {
-        setMsg(CONFIG.TEXT.WRITE_SOMETHING);
-        return;
-      }
+      if (!text) { setMsg(CONFIG.TEXT.WRITE_SOMETHING); return; }
 
       hasVoted = true;
-      setOpenDisabled(true);
+      freezeVotedUI(true);
 
       try {
         const roundId = "round_" + (round ?? 0);
-
         await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
           .doc(roundId)
           .collection("answers")
@@ -394,7 +424,7 @@ applyPresenterGate();
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
-        setOpenDisabled(false);
+        freezeVotedUI(false);
         setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
@@ -403,23 +433,14 @@ applyPresenterGate();
       if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
-      const w = [
-        sanitizeWord(wc1?.value),
-        sanitizeWord(wc2?.value),
-        sanitizeWord(wc3?.value)
-      ].filter(Boolean);
-
-      if (w.length === 0) {
-        setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD);
-        return;
-      }
+      const w = [sanitizeWord(wc1?.value), sanitizeWord(wc2?.value), sanitizeWord(wc3?.value)].filter(Boolean);
+      if (!w.length) { setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD); return; }
 
       hasVoted = true;
-      setWcDisabled(true);
+      freezeVotedUI(true);
 
       try {
         const roundId = "round_" + (round ?? 0);
-
         await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
           .doc(roundId)
           .collection("answers")
@@ -431,59 +452,14 @@ applyPresenterGate();
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
-        setWcDisabled(false);
+        freezeVotedUI(false);
         setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
-    function resetUI() {
-      setMsg("");
-
-      disableActiveChoiceButtons(false);
-      unlockLikertButtons();
-
-      if (openText && openCount) {
-        openText.value = "";
-        openCount.textContent = "0 / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
-      }
-      setOpenDisabled(false);
-
-      if (wc1) wc1.value = "";
-      if (wc2) wc2.value = "";
-      if (wc3) wc3.value = "";
-      setWcDisabled(false);
-
-      // Respekter gate umiddelbart
-      if (!presenterOk()) applyPresenterGate();
-    }
-
-    function disableActiveChoiceButtons(disable) {
-      const box = getActiveBoxElement();
-      if (!box) return;
-
-      box.querySelectorAll("button.choice").forEach(b => {
-        b.disabled = disable;
-      });
-    }
-
-    function lockLikertButtons(selectedBtn) {
-      document.querySelectorAll(".likert-btn").forEach(b => {
-        b.disabled = true;
-        b.classList.add("disabled");
-        if (b === selectedBtn) b.classList.add("selected");
-      });
-    }
-
-    function unlockLikertButtons() {
-      // Ikke unlock hvis foreleser er borte
-      if (!presenterOk()) return;
-
-      document.querySelectorAll(".likert-btn").forEach(b => {
-        b.disabled = false;
-        b.classList.remove("disabled", "selected");
-      });
-    }
-
+    // -------------------------
+    // misc
+    // -------------------------
     function hideAll() {
       ["sbsBox","bnrBox","abcBox","jnBox","likertBox","openBox","wcBox"].forEach(id => {
         const el = document.getElementById(id);
