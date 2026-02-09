@@ -111,7 +111,11 @@
     let round = null;
     let hasVoted = false;
 
+    // question title from state
+    let questionTitle = null;
+
     // DOM refs
+    const titleEl = document.getElementById("title");
     const waitingBox = document.getElementById("waitingBox");
     const msgEl = document.getElementById("msg");
     const likertGrid = document.getElementById("likertGrid");
@@ -156,8 +160,10 @@
       if (!ok) {
         hideAll();
         waitingBox.classList.remove("hidden");
+        waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
         setMsg("");
         setAllInputsDisabled(true);
+        setTitle(); // show best available title even when waiting
         return;
       }
 
@@ -167,8 +173,36 @@
       if (hasVoted) freezeVotedUI(true);
       else freezeVotedUI(false);
 
-      // Render det siste vi vet om mode/round
+      setTitle();
       render();
+    }
+
+    // -------------------------
+    // Title helper
+    // -------------------------
+    function niceModeLabel(m) {
+      const map = {
+        [CONFIG.MODES.SBS]: "Avstemning",
+        [CONFIG.MODES.BNR]: "Avstemning",
+        [CONFIG.MODES.ABC]: "Avstemning",
+        [CONFIG.MODES.YESNO]: "Avstemning",
+        [CONFIG.MODES.LIKERT]: "Avstemning",
+        [CONFIG.MODES.OPEN]: "Åpne svar",
+        [CONFIG.MODES.WORDCLOUD]: "Ordsky"
+      };
+      return map[m] || "Avstemning";
+    }
+
+    function setTitle() {
+      const qt = (questionTitle || "").toString().trim();
+      if (qt) {
+        titleEl.textContent = qt;
+        return;
+      }
+
+      // fallback: mode label or plain "Avstemning"
+      if (mode) titleEl.textContent = niceModeLabel(mode);
+      else titleEl.textContent = "Avstemning";
     }
 
     // -------------------------
@@ -248,20 +282,26 @@
     // -------------------------
     stateRef.onSnapshot(doc => {
       if (!doc.exists) return;
-      const d = doc.data();
+      const d = doc.data() || {};
 
       const newMode = d.mode ?? null;
       const newRound = d.round ?? null;
+
+      // NEW: title from state
+      const newQuestionTitle = (d.questionTitle ?? null);
 
       const changed = (newMode !== mode || newRound !== round);
 
       mode = newMode;
       round = newRound;
+      questionTitle = newQuestionTitle;
 
       if (changed) {
         hasVoted = false;
         resetUI();
       }
+
+      setTitle();
 
       // Ikke tving render hvis presenter er borte; gate styrer visning
       if (presenterOk()) {
@@ -278,14 +318,18 @@
     function render() {
       hideAll();
 
+      setTitle();
+
       if (!presenterOk()) {
         waitingBox.classList.remove("hidden");
+        waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
         setMsg("");
         return;
       }
 
       if (!mode) {
         waitingBox.classList.remove("hidden");
+        waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
         if (!hasVoted) setMsg("");
         return;
       }
@@ -302,6 +346,7 @@
       if (mode === CONFIG.MODES.WORDCLOUD) { show("wcBox"); return; }
 
       waitingBox.classList.remove("hidden");
+      waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
     }
 
     function getActiveBoxElement() {
@@ -479,4 +524,5 @@
   </script>
 </body>
 </html>
+
 
