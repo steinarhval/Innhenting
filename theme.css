@@ -68,10 +68,9 @@
   --ui-nav-fg:        #FFFFFF;
 
   /* Destructive (skal matche core rød) */
-  --ui-danger:       var(--red-core);
-  --ui-danger-hover: #7F322E; /* fallback */
-  --ui-danger-hover: color-mix(in srgb, var(--red-core) 85%, #000 15%);
-  --ui-danger-fg:    #FFFFFF;
+  --ui-danger:        var(--red-core);
+  --ui-danger-hover:  color-mix(in srgb, var(--red-core) 85%, #000 15%);
+  --ui-danger-fg:     #FFFFFF;
 
   /* =========================================================
      PRESETS for opplegg-editor
@@ -79,33 +78,37 @@
   --preset-traffic-1: var(--sbs-green);
   --preset-traffic-2: var(--sbs-yellow);
   --preset-traffic-3: var(--sbs-red);
-  --preset-traffic-4: var(--sbs-orange);
+--preset-traffic-4: var(--sbs-orange);
+
 
   --preset-blue-1: var(--ui-primary);
   --preset-blue-2: var(--ui-secondary);
-  --preset-blue-3: #DDE8EC; /* fallback */
   --preset-blue-3: color-mix(in srgb, var(--ui-secondary) 25%, #fff 75%);
 
-  /* Nordisk – 5 ankre (mørk petrol -> blågrå -> lys tåke) */
-  --preset-nordic-1: #0E2F3A;  /* veldig mørk petrol */
-  --preset-nordic-2: #1F4E5F;  /* din ui-primary */
-  --preset-nordic-3: #4F7C8A;  /* din secondary */
-  --preset-nordic-4: #8FB3BE;  /* lys, “kysttåke” */
-  --preset-nordic-5: #D9E7EC;  /* veldig lys */
+/* Nordisk – 5 ankre (mørk petrol -> blågrå -> lys tåke) */
+--preset-nordic-1: #0E2F3A;  /* veldig mørk petrol */
+--preset-nordic-2: #1F4E5F;  /* din ui-primary */
+--preset-nordic-3: #4F7C8A;  /* din secondary */
+--preset-nordic-4: #8FB3BE;  /* lys, “kysttåke” */
+--preset-nordic-5: #D9E7EC;  /* veldig lys */
 
-  /* Grå – 5 ankre (stor forskjell mellom valgene) */
-  --preset-gray-1: #111111;
-  --preset-gray-2: #333333;
-  --preset-gray-3: #666666;
-  --preset-gray-4: #B9C0C6;  /* lys stålgrå */
-  --preset-gray-5: #E6EAED;  /* veldig lys */
 
-  /* Rosa – 5 ankre (ikke Barbie, men tydeligere trinn) */
-  --preset-pink-1: #4B1E31;  /* dyp vin */
-  --preset-pink-2: #7A3B57;  /* din pink-1 */
-  --preset-pink-3: #A65A7C;  /* din pink-2 */
-  --preset-pink-4: #D08FA9;  /* lys rose */
-  --preset-pink-5: #F2D7E2;  /* veldig lys blush */
+
+/* Grå – 5 ankre (stor forskjell mellom valgene) */
+--preset-gray-1: #111111;
+--preset-gray-2: #333333;
+--preset-gray-3: #666666;
+--preset-gray-4: #B9C0C6;  /* lys stålgrå */
+--preset-gray-5: #E6EAED;  /* veldig lys */
+
+
+/* Rosa – 5 ankre (ikke Barbie, men tydeligere trinn) */
+--preset-pink-1: #4B1E31;  /* dyp vin */
+--preset-pink-2: #7A3B57;  /* din pink-1 */
+--preset-pink-3: #A65A7C;  /* din pink-2 */
+--preset-pink-4: #D08FA9;  /* lys rose */
+--preset-pink-5: #F2D7E2;  /* veldig lys blush */
+
 
   /* Ja/nei i opplegg-editor (ikke “statusfarger”) */
   --yn-yes-bg: var(--ui-primary);
@@ -127,17 +130,13 @@
   --color-btn-ghost-fg: var(--color-text-main);
   --color-btn-ghost-hover-filter: 0.95;
 
-  --color-btn-show-bg: #2B4B56; /* fallback */
   --color-btn-show-bg: color-mix(in srgb, var(--color-secondary) 70%, #000 30%);
   --color-btn-show-fg: var(--color-surface);
-
-  --color-btn-show-hover-bg: #23404A; /* fallback */
   --color-btn-show-hover-bg: color-mix(in srgb, var(--color-secondary) 55%, #000 45%);
 
   /* (Legacy) beholdes for kompatibilitet */
   --color-btn-danger-bg: var(--sbs-red);
   --color-btn-danger-fg: var(--color-surface);
-  --color-btn-danger-hover-bg: #7F322E; /* fallback */
   --color-btn-danger-hover-bg: color-mix(in srgb, var(--sbs-red) 85%, #000 15%);
 
   --color-btn-success-bg: var(--sbs-green);
@@ -159,11 +158,8 @@
   --color-input-border-strong: var(--color-ui-400);
 
   /* Error */
-  --color-error-bg: #F7E7E6; /* fallback */
   --color-error-bg: color-mix(in srgb, var(--sbs-red) 14%, var(--color-surface) 86%);
-  --color-error-border: #EAC9C7; /* fallback */
   --color-error-border: color-mix(in srgb, var(--sbs-red) 28%, var(--color-surface) 72%);
-  --color-error-text: #5B1F1C; /* fallback */
   --color-error-text: color-mix(in srgb, var(--sbs-red) 70%, #000 30%);
 
   /* Skygger */
@@ -182,7 +178,6 @@
   --color-qr-border: var(--color-ui-300);
 
   /* Focus ring */
-  --color-focus-ring: #E6D2A6; /* fallback */
   --color-focus-ring: color-mix(in srgb, var(--color-accent) 60%, #fff 40%);
 
   /* Font */
@@ -1309,7 +1304,6 @@ body.program-edit details.qAcc > summary{
 body.program-edit details.qAcc > summary::-webkit-details-marker{ display:none; }
 
 body.program-edit details.qAcc > summary:hover{
-  background: #F2F2F2; /* fallback */
   background: color-mix(in srgb, var(--color-ui-100) 70%, transparent 30%);
 }
 
@@ -1334,7 +1328,6 @@ body.program-edit details.qAcc:not([open]) .qAccBody{ display:none; }
 .stickyBar{
   position: sticky;
   bottom: 0;
-  background: #F7F8F9; /* fallback */
   background: color-mix(in srgb, var(--color-bg) 85%, #fff 15%);
   border-top: 1px solid var(--color-divider);
   padding: 12px 0;
@@ -1345,3 +1338,4 @@ body.program-edit details.qAcc:not([open]) .qAccBody{ display:none; }
   justify-content: flex-end;
   flex-wrap: wrap;
 }
+preset

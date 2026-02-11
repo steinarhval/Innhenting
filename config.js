@@ -32,11 +32,11 @@
       PRESENCE_DOC: { collection: "app",   doc: "presence" },
 
       OPEN_COLLECTION: "openAnswers",
-      WORDCLOUD_COLLECTION: "wordCloudAnswers"
+      WORDCLOUD_COLLECTION: "wordCloudAnswers",
     },
 
     URLS: {
-      QR_TARGET: "https://steinarhval.github.io/Innhenting/innhenting.html"
+      QR_TARGET: "https://steinarhval.github.io/Innhenting/innhenting.html",
     },
 
     LIMITS: {
@@ -54,7 +54,7 @@
       WORD_MAX_COUNT_HARD_MAX: 10,
 
       WORD_MAX_CHARS_HARD_MIN: 5,
-      WORD_MAX_CHARS_HARD_MAX: 40
+      WORD_MAX_CHARS_HARD_MAX: 40,
     },
 
     TEXT: {
@@ -64,7 +64,7 @@
       WRITE_SOMETHING: "Skriv noe før du sender 🙂",
       WRITE_AT_LEAST_ONE_WORD: "Skriv minst ett ord (og unngå helt vanlige ord) 🙂",
       NO_ANSWERS_YET: "Ingen svar ennå.",
-      NO_WORDS_YET: "Ingen ord ennå."
+      NO_WORDS_YET: "Ingen ord ennå.",
     },
 
     STOPWORDS_NO: [
@@ -72,25 +72,22 @@
       "er","var","blir","ble","har","hadde","ha","kan","kunne","skal","skulle","vil","ville","må","måtte",
       "ikke","ingen","noen","nok","bare","også","så","da","der","her","hvor","hva","hvem","hvordan","når",
       "en","ei","et","ene","ett","dette","disse","denne","sånn","slik","altså","jo","nei","ja"
-    ]
+    ],
   };
 
   function initFirebaseOnce() {
     if (!window.firebase) throw new Error("Firebase SDK er ikke lastet.");
-    if (!firebase.apps || !firebase.apps.length) {
-      firebase.initializeApp({
-        apiKey: CONFIG.FIREBASE.apiKey,
-        authDomain: CONFIG.FIREBASE.authDomain,
-        projectId: CONFIG.FIREBASE.projectId
-      });
-    }
-    if (!firebase.firestore) throw new Error("Firestore SDK er ikke lastet (firebase-firestore.js mangler).");
+    if (!firebase.apps.length) firebase.initializeApp({
+      apiKey: CONFIG.FIREBASE.apiKey,
+      authDomain: CONFIG.FIREBASE.authDomain,
+      projectId: CONFIG.FIREBASE.projectId
+    });
     return firebase.firestore();
   }
 
   function getRefs(db) {
     const stateRef = db.collection(CONFIG.FIRESTORE.STATE_DOC.collection).doc(CONFIG.FIRESTORE.STATE_DOC.doc);
-    const pollRef = db.collection(CONFIG.FIRESTORE.POLL_DOC.collection).doc(CONFIG.FIRESTORE.POLL_DOC.doc);
+    const pollRef  = db.collection(CONFIG.FIRESTORE.POLL_DOC.collection).doc(CONFIG.FIRESTORE.POLL_DOC.doc);
     const presenceRef = db.collection(CONFIG.FIRESTORE.PRESENCE_DOC.collection).doc(CONFIG.FIRESTORE.PRESENCE_DOC.doc);
     return { stateRef, pollRef, presenceRef };
   }
