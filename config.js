@@ -40,7 +40,7 @@
     },
 
     LIMITS: {
-      // Defaults (kan overstyres per spørsmål i edit.html)
+      // Defaults (kan overstyres per spørsmål)
       OPEN_MAX_CHARS_DEFAULT: 150,
 
       WORD_MAX_COUNT_DEFAULT: 3,
@@ -73,6 +73,30 @@
       "ikke","ingen","noen","nok","bare","også","så","da","der","her","hvor","hva","hvem","hvordan","når",
       "en","ei","et","ene","ett","dette","disse","denne","sånn","slik","altså","jo","nei","ja"
     ],
+
+    // ✅ NYTT: editor-konstanter samlet her
+    EDITOR: {
+      MODE_LABELS: {
+        multi: "Flervalgsspørsmål",
+        likert: "Vurderingsskala",
+        open: "Fritekst",
+        wordcloud: "Ordsky"
+      },
+
+      DEFAULTS: {
+        likert: { min: 0, max: 10, minLabel: "Helt uenig", maxLabel: "Helt enig" },
+        open: { maxChars: 150 },
+        wordcloud: { maxWords: 3, maxCharsPerWord: 20 }
+      },
+
+      // CSS-var-navnene som theme.css eier (edit.html bare “leser”)
+      PRESET_VARS: {
+        traffic: ["--preset-traffic-1","--preset-traffic-2","--preset-traffic-4","--preset-traffic-3"],
+        nordic:  ["--preset-nordic-1","--preset-nordic-2","--preset-nordic-3","--preset-nordic-4","--preset-nordic-5"],
+        pink:    ["--preset-pink-1","--preset-pink-2","--preset-pink-3","--preset-pink-4","--preset-pink-5"],
+        gray:    ["--preset-gray-1","--preset-gray-2","--preset-gray-3","--preset-gray-4","--preset-gray-5"],
+      }
+    }
   };
 
   function initFirebaseOnce() {

@@ -78,37 +78,32 @@
   --preset-traffic-1: var(--sbs-green);
   --preset-traffic-2: var(--sbs-yellow);
   --preset-traffic-3: var(--sbs-red);
---preset-traffic-4: var(--sbs-orange);
-
+  --preset-traffic-4: var(--sbs-orange);
 
   --preset-blue-1: var(--ui-primary);
   --preset-blue-2: var(--ui-secondary);
   --preset-blue-3: color-mix(in srgb, var(--ui-secondary) 25%, #fff 75%);
 
-/* Nordisk – 5 ankre (mørk petrol -> blågrå -> lys tåke) */
---preset-nordic-1: #0E2F3A;  /* veldig mørk petrol */
---preset-nordic-2: #1F4E5F;  /* din ui-primary */
---preset-nordic-3: #4F7C8A;  /* din secondary */
---preset-nordic-4: #8FB3BE;  /* lys, “kysttåke” */
---preset-nordic-5: #D9E7EC;  /* veldig lys */
+  /* Nordisk – 5 ankre (mørk petrol -> blågrå -> lys tåke) */
+  --preset-nordic-1: #0E2F3A;  /* veldig mørk petrol */
+  --preset-nordic-2: #1F4E5F;  /* din ui-primary */
+  --preset-nordic-3: #4F7C8A;  /* din secondary */
+  --preset-nordic-4: #8FB3BE;  /* lys, “kysttåke” */
+  --preset-nordic-5: #D9E7EC;  /* veldig lys */
 
+  /* Grå – 5 ankre (stor forskjell mellom valgene) */
+  --preset-gray-1: #111111;
+  --preset-gray-2: #333333;
+  --preset-gray-3: #666666;
+  --preset-gray-4: #B9C0C6;  /* lys stålgrå */
+  --preset-gray-5: #E6EAED;  /* veldig lys */
 
-
-/* Grå – 5 ankre (stor forskjell mellom valgene) */
---preset-gray-1: #111111;
---preset-gray-2: #333333;
---preset-gray-3: #666666;
---preset-gray-4: #B9C0C6;  /* lys stålgrå */
---preset-gray-5: #E6EAED;  /* veldig lys */
-
-
-/* Rosa – 5 ankre (ikke Barbie, men tydeligere trinn) */
---preset-pink-1: #4B1E31;  /* dyp vin */
---preset-pink-2: #7A3B57;  /* din pink-1 */
---preset-pink-3: #A65A7C;  /* din pink-2 */
---preset-pink-4: #D08FA9;  /* lys rose */
---preset-pink-5: #F2D7E2;  /* veldig lys blush */
-
+  /* Rosa – 5 ankre (ikke Barbie, men tydeligere trinn) */
+  --preset-pink-1: #4B1E31;  /* dyp vin */
+  --preset-pink-2: #7A3B57;  /* din pink-1 */
+  --preset-pink-3: #A65A7C;  /* din pink-2 */
+  --preset-pink-4: #D08FA9;  /* lys rose */
+  --preset-pink-5: #F2D7E2;  /* veldig lys blush */
 
   /* Ja/nei i opplegg-editor (ikke “statusfarger”) */
   --yn-yes-bg: var(--ui-primary);
@@ -442,6 +437,12 @@ textarea{
   padding: 0.8rem 0.9rem;
 }
 
+.input--small{
+  width: 120px;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+}
+
 select{
   padding: 0.7rem 0.8rem;
 }
@@ -563,6 +564,7 @@ textarea{
   line-height: 1.35;
 }
 .help--spaced{ margin-top: 14px; }
+.help--tight{ margin-top: 6px; }
 
 .sectionTitle{
   font-weight: 950;
@@ -818,6 +820,7 @@ body.collect .choice-stack{
 /* =========================================================
    SIDE: RESULTATER (body.results)
    ========================================================= */
+/* (uendret – beholdt som du hadde det) */
 body.results{
   --content-max: min(1400px, 96vw);
   --content-pad: var(--space-6);
@@ -1192,26 +1195,6 @@ body.program-edit .qCardRow{
   align-items: flex-start;
 }
 
-body.program-edit .qHeader{
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-body.program-edit .qTitle{
-  font-weight: 950;
-  font-size: 1.12rem;
-}
-
-body.program-edit .qMeta{
-  margin-top: 6px;
-  color: var(--color-text-muted);
-  opacity: 0.9;
-  font-weight: 700;
-}
-
 body.program-edit .qTools{
   display: flex;
   gap: 8px;
@@ -1259,7 +1242,6 @@ body.program-edit .optRow{
   }
 }
 
-
 body.program-edit input[type="color"]{
   width: 58px;
   height: 44px;
@@ -1269,18 +1251,81 @@ body.program-edit input[type="color"]{
   cursor: pointer;
 }
 
-body.program-edit .presetRow{
-  justify-content: flex-start;
-  margin-top: 12px;
-}
-
 body.program-edit .addOptRow{
   justify-content: flex-start;
   margin-top: 10px;
 }
 
+/* ✅ Flyttet fra injectLocalCss (scopet til program-edit) */
+body.program-edit details.qAcc summary{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+body.program-edit .qAccTitleText{ flex: 1; min-width: 0; }
+body.program-edit .qAccTitleInput{ flex: 1; min-width: 0; display:none; }
+body.program-edit details.qAcc[open] .qAccTitleText{ display:none; }
+body.program-edit details.qAcc[open] .qAccTitleInput{ display:inline-block; }
+body.program-edit .qAccTitleInput.input{ height: 40px; }
+
+/* Luft under Modus */
+body.program-edit .modeRow{ margin-bottom: 20px; }
+
+/* Avstand fra summary ned til innhold */
+body.program-edit details.qAcc[open] .qAccBody{ padding-top: 18px; }
+
+/* Avstand under overskrifter inne i gridet */
+body.program-edit .qAccBody .sectionTitle--tight{ margin-top: 0; margin-bottom: 8px; }
+
+/* Luft mellom venstre/høyre kolonne (kun her) */
+body.program-edit .grid2{ gap: 18px; }
+
+/* Preset swatch */
+body.program-edit .presetRow{
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+body.program-edit .presetSwatchBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.12);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.06s ease, filter 0.12s ease;
+}
+body.program-edit .presetSwatchBtn:hover{ filter: brightness(0.97); transform: translateY(-1px); }
+body.program-edit .presetSwatchBtn:active{ filter: brightness(0.92); transform: translateY(0px); }
+
+/* save badge (JS bruker dette) */
+body.program-edit .saveBadge{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  font-weight: 900;
+  border: 1px solid rgba(0,0,0,0.10);
+}
+body.program-edit .saveBadge--dirty{
+  background: color-mix(in srgb, var(--ui-danger) 14%, #fff 86%);
+  color: color-mix(in srgb, var(--ui-danger) 65%, #000 35%);
+}
+body.program-edit .saveBadge--ok{
+  background: color-mix(in srgb, var(--ui-primary) 14%, #fff 86%);
+  color: color-mix(in srgb, var(--ui-primary) 65%, #000 35%);
+}
+
 /* =========================================================
-   OPPLEGG EDIT: Accordion
+   OPPLEGG EDIT: Accordion (eksisterende)
    ========================================================= */
 body.program-edit details.qAcc{
   background: var(--color-surface);
@@ -1338,4 +1383,3 @@ body.program-edit details.qAcc:not([open]) .qAccBody{ display:none; }
   justify-content: flex-end;
   flex-wrap: wrap;
 }
-preset
