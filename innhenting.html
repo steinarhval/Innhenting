@@ -20,11 +20,13 @@
 
     <!-- LIKERT -->
     <div id="likertBox" class="hidden">
-      <div class="likert-wrap">
-        <div class="likert-scale-label" id="likertScaleLabel">
-          Skala
+      <div class="box-wrap">
+        <div class="likert-wrap">
+          <div class="likert-scale-label" id="likertScaleLabel">
+            Skala
+          </div>
+          <div class="likert-grid" id="likertGrid"></div>
         </div>
-        <div class="likert-grid" id="likertGrid"></div>
       </div>
     </div>
 
@@ -32,41 +34,24 @@
     <div id="openBox" class="hidden">
       <div class="box-wrap">
         <label for="openText" class="label" id="openLabel">Skriv et kort svar</label>
-        <textarea id="openText" rows="4" maxlength="200"></textarea>
-
-        <div class="row">
-          <div id="openCount" class="counter">0 / 200</div>
-          <button id="openSendBtn" class="btn btn--success btn--compact" onclick="sendOpenAnswer()">
-            Send
-          </button>
+        <textarea id="openText" rows="4" class="textarea" placeholder=""></textarea>
+        <div class="row between" style="margin-top:.6rem;">
+          <div class="muted" id="openCounter"></div>
+          <button class="btn btn--success" id="openSendBtn" onclick="sendOpen()">Send</button>
         </div>
       </div>
     </div>
 
-    <!-- WORD CLOUD -->
+    <!-- WORDCLOUD -->
     <div id="wcBox" class="hidden">
       <div class="box-wrap">
-        <div class="label" id="wcLabel">Skriv ord</div>
-
-        <div class="wc-grid">
-          <input id="wc1" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 1">
-          <input id="wc2" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 2 (valgfritt)">
-          <input id="wc3" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 3 (valgfritt)">
-        </div>
-
-        <div class="row row--end">
-          <button id="wcSendBtn" class="btn btn--success btn--compact" onclick="sendWordCloud()">
-            Send
-          </button>
-        </div>
-
-        <div class="hint">
-          Tips: Ett ord per felt. Bindestrek er ok. Tall og emojis blir ignorert.
-        </div>
+        <div class="label" id="wcLabel">Skriv inntil 3 ord</div>
+        <div id="wcInputs" class="wcInputs"></div>
+        <button class="btn btn--success" style="margin-top:.6rem;" onclick="sendWordcloud()">Send</button>
       </div>
     </div>
 
-    <div id="msg"></div>
+    <div id="msg" class="msg hidden"></div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -79,7 +64,13 @@
 
     let mode = null;
     let round = null;
+    let roundId = null;
+    let status = "idle";
     let hasVoted = false;
+
+    // resync / reconnect
+    let stateUnsub = null;
+    let lastStateUpdateMs = 0;
 
     // NY: aktivt spørsmål (kilde til sannhet)
     let activeQuestion = null;
@@ -89,361 +80,281 @@
     const waitingBox = document.getElementById("waitingBox");
     const msgEl = document.getElementById("msg");
 
+    // boxes
+    const multiBox = document.getElementById("multiBox");
+    const likertBox = document.getElementById("likertBox");
+    const openBox = document.getElementById("openBox");
+    const wcBox = document.getElementById("wcBox");
+
+    // multi
     const multiChoices = document.getElementById("multiChoices");
 
+    // likert
     const likertGrid = document.getElementById("likertGrid");
     const likertScaleLabel = document.getElementById("likertScaleLabel");
 
+    // open
     const openText = document.getElementById("openText");
-    const openCount = document.getElementById("openCount");
-    const openSendBtn = document.getElementById("openSendBtn");
+    const openCounter = document.getElementById("openCounter");
     const openLabel = document.getElementById("openLabel");
+    const openSendBtn = document.getElementById("openSendBtn");
 
-    const wc1 = document.getElementById("wc1");
-    const wc2 = document.getElementById("wc2");
-    const wc3 = document.getElementById("wc3");
-    const wcSendBtn = document.getElementById("wcSendBtn");
+    // wordcloud
+    const wcInputs = document.getElementById("wcInputs");
     const wcLabel = document.getElementById("wcLabel");
 
-    const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
-
-    // -------------------------
-    // Presenter gate (presence)
-    // -------------------------
-    let presenterAliveFlag = true;
-    let lastPresenterMs = 0;
-
-    function presenterOk() {
-      const now = Date.now();
-      if (!presenterAliveFlag) return false;
-      if (!lastPresenterMs) return false;
-      return (now - lastPresenterMs) <= CONFIG.PRESENCE.TIMEOUT_MS;
+    function setMsg(t) {
+      msgEl.textContent = (t || "");
+      msgEl.classList.toggle("hidden", !msgEl.textContent);
     }
 
-    if (presenceRef) {
-      presenceRef.onSnapshot(snap => {
-        const d = snap.exists ? snap.data() : {};
-        presenterAliveFlag = (d?.alive !== false);
-        lastPresenterMs = d?.ts?.toMillis ? d.ts.toMillis() : 0;
-        applyPresenterGate();
-      });
-    }
-    setInterval(() => applyPresenterGate(), 1000);
-
-    function applyPresenterGate() {
-      const ok = presenterOk();
-
-      if (!ok) {
-        hideAll();
-        waitingBox.classList.remove("hidden");
-        waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
-        setMsg("");
-        setAllInputsDisabled(true);
-        setTitle();
-        return;
-      }
-
-      if (hasVoted) freezeVotedUI(true);
-      else freezeVotedUI(false);
-
-      setTitle();
-      render();
+    function hideAll() {
+      multiBox.classList.add("hidden");
+      likertBox.classList.add("hidden");
+      openBox.classList.add("hidden");
+      wcBox.classList.add("hidden");
     }
 
-    // -------------------------
-    // Title helper
-    // -------------------------
-    function niceModeLabel(m) {
-      const map = {
-        [CONFIG.MODES.SBS]: "Sunn, bekymringsfull eller skadelig",
-        [CONFIG.MODES.BNR]: "Beskyttende, nøytral eller risiko",
-        [CONFIG.MODES.ABC]: "A, B eller C",
-        [CONFIG.MODES.YESNO]: "JA eller NEI",
-        [CONFIG.MODES.MULTI]: "Flervalg",
-        [CONFIG.MODES.LIKERT]: "Skala",
-        [CONFIG.MODES.OPEN]: "Åpne svar",
-        [CONFIG.MODES.WORDCLOUD]: "Ordsky"
-      };
-      return map[m] || "Avstemning";
+    function resetUI() {
+      setMsg("");
+      if (openText) openText.value = "";
+      if (wcInputs) wcInputs.innerHTML = "";
     }
 
     function setTitle() {
-      const qt = (activeQuestion?.title || "").toString().trim();
-      if (qt) { titleEl.textContent = qt; return; }
-      if (mode) titleEl.textContent = niceModeLabel(mode);
-      else titleEl.textContent = "Avstemning";
+      const q = activeQuestion;
+      const t = q?.title || q?.questionTitle || null;
+      titleEl.textContent = t ? t : "Avstemning";
     }
 
-    // -------------------------
-    // UI helpers
-    // -------------------------
-    function setOpenDisabled(disabled) {
-      if (openText) openText.disabled = disabled;
-      if (openSendBtn) openSendBtn.disabled = disabled;
+    function presenterOk() {
+      // “presenter heartbeat” – hvis foreleser ikke er aktiv: gate
+      const last = FirebaseUtil.getPresenterLastSeenMs();
+      const maxAge = CONFIG?.PRESENCE?.MAX_AGE_MS || 8000;
+      if (!last) return false;
+      return (Date.now() - last) <= maxAge;
     }
 
-    function setWcDisabled(disabled) {
-      [wc1, wc2, wc3].forEach(x => { if (x) x.disabled = disabled; });
-      if (wcSendBtn) wcSendBtn.disabled = disabled;
+    function applyPresenterGate() {
+      // behold eksisterende (ikke endre svarflyt her)
     }
 
-    function setAllInputsDisabled(disabled) {
-      // multi
-      if (multiChoices) multiChoices.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
+    function renderDynamicMulti() {
+      const q = activeQuestion;
+      const opts = Array.isArray(q?.options) ? q.options : [];
 
-      // likert
-      document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
-
-      // open/wc
-      setOpenDisabled(disabled);
-      setWcDisabled(disabled);
-    }
-
-    function freezeVotedUI(freeze) {
-      if (freeze) {
-        setAllInputsDisabled(true);
-      } else {
-        if (!presenterOk()) return;
-        setAllInputsDisabled(false);
+      if (!opts.length) {
+        multiChoices.innerHTML = "";
+        return;
       }
+
+      multiChoices.innerHTML = opts.map(o => {
+        const id = (o && o.id) ? String(o.id) : "";
+        const label = (o && o.label) ? String(o.label) : id;
+        const color = (o && o.color) ? String(o.color) : "";
+
+        const safeLabel = escapeHtml(label || id);
+        const safeId = escapeAttr(id);
+
+        return `<button class="choice" style="${color ? ("background:" + escapeAttr(color) + ";") : ""}" onclick="voteDynamic('${safeId}')">${safeLabel}</button>`;
+      }).join("");
     }
 
-    function sanitizeWord(raw, maxChars) {
-      const s = (raw || "").toLowerCase().trim();
-      if (!s) return "";
-      let cleaned = s.replace(/[^a-zæøå\-]/g, "");
-      cleaned = cleaned.replace(/^\-+|\-+$/g, "");
-      if (!cleaned) return "";
-      if (STOPWORDS.has(cleaned)) return "";
-      const cap = Number.isFinite(maxChars) ? maxChars : CONFIG.LIMITS.WORD_MAX_CHARS;
-      if (cleaned.length > cap) cleaned = cleaned.slice(0, cap);
-      return cleaned;
-    }
+    function buildLikertGrid() {
+      // bygger knapper for likert (behold eksisterende enkelhet)
+      const q = activeQuestion || {};
+      const min = Number.isFinite(Number(q.likertMin)) ? Number(q.likertMin) : 0;
+      const max = Number.isFinite(Number(q.likertMax)) ? Number(q.likertMax) : 10;
 
-    function getMultiOptionsForRender() {
-      if (activeQuestion?.options && Array.isArray(activeQuestion.options) && activeQuestion.options.length >= 2) {
-        return activeQuestion.options;
+      const minLabel = q.likertMinLabel || "";
+      const maxLabel = q.likertMaxLabel || "";
+
+      if (likertScaleLabel) {
+        likertScaleLabel.textContent = (minLabel || maxLabel) ? `${minLabel} – ${maxLabel}` : "Skala";
       }
-      const preset = ProgramUtil.multiPresetForMode(mode);
-      if (preset?.options) return preset.options;
-      return [
-        { id:"a", label:"A", color:"var(--sbs-green)" },
-        { id:"b", label:"B", color:"var(--sbs-yellow)" },
-        { id:"c", label:"C", color:"var(--sbs-red)" }
-      ];
-    }
-
-    function rebuildMultiButtons() {
-      if (!multiChoices) return;
-      const opts = getMultiOptionsForRender();
-      multiChoices.innerHTML = "";
-
-      opts.forEach((opt, idx) => {
-        const id = (opt?.id || ("o" + idx)).toString();
-        const label = (opt?.label ?? ("Valg " + (idx + 1))).toString();
-
-        const btn = document.createElement("button");
-        btn.className = "choice";
-        btn.textContent = label;
-
-        // farge fra edit (hex eller var(--...))
-        if (opt?.color) btn.style.background = opt.color;
-
-        btn.addEventListener("click", () => voteMulti(id));
-        multiChoices.appendChild(btn);
-      });
-    }
-
-    function rebuildLikertButtons() {
-      if (!likertGrid) return;
-      const qLik = activeQuestion?.likert || null;
-
-      const min = Number.isFinite(qLik?.min) ? qLik.min : 0;
-      const max = Number.isFinite(qLik?.max) ? qLik.max : 10;
 
       likertGrid.innerHTML = "";
-
-      // label over
-      if (likertScaleLabel) {
-        const left = (qLik?.minLabel || String(min)).toString();
-        const right = (qLik?.maxLabel || String(max)).toString();
-        likertScaleLabel.textContent = `${min} = ${left}   |   ${max} = ${right}`;
-      }
-
-      // bygger knapper fra max til min (som før)
-      for (let v = max; v >= min; v--) {
+      for (let v = min; v <= max; v++) {
         const btn = document.createElement("button");
         btn.className = "likert-btn";
-        btn.textContent = v;
-        btn.dataset.value = String(v);
-        btn.addEventListener("click", () => voteLikert(v, btn));
+        btn.textContent = String(v);
+        btn.onclick = () => voteLikert(v);
         likertGrid.appendChild(btn);
       }
     }
 
-    function applyOpenConfig() {
-      const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
+    function setupOpen() {
+      const q = activeQuestion || {};
+      const maxChars = Number.isFinite(Number(q.openMaxChars)) ? Number(q.openMaxChars) : CONFIG.LIMITS.OPEN_MAX_CHARS;
 
+      if (openLabel) openLabel.textContent = q.openLabel || "Skriv et kort svar";
       if (openText) openText.maxLength = maxChars;
-      if (openLabel) openLabel.textContent = `Skriv et kort svar (maks ${maxChars} tegn)`;
 
-      if (openCount) openCount.textContent = `0 / ${maxChars}`;
-      if (openText) openText.value = "";
-
-      if (openText && openCount) {
-        openText.oninput = () => {
-          openCount.textContent = (openText.value.length || 0) + " / " + maxChars;
+      if (openCounter && openText) {
+        const update = () => {
+          const n = (openText.value || "").length;
+          openCounter.textContent = `${n}/${maxChars}`;
         };
+        openText.oninput = update;
+        update();
+      }
+
+      if (openSendBtn) {
+        openSendBtn.disabled = false;
       }
     }
 
-    function applyWcConfig() {
-      const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
-      const maxChars = Number.isFinite(activeQuestion?.wordcloud?.maxCharsPerWord) ? activeQuestion.wordcloud.maxCharsPerWord : CONFIG.LIMITS.WORD_MAX_CHARS;
+    function setupWordcloud() {
+      const q = activeQuestion || {};
+      const maxWords = Number.isFinite(Number(q.wordcloudMaxWords)) ? Number(q.wordcloudMaxWords) : 3;
+      const maxCharsPerWord = Number.isFinite(Number(q.wordcloudMaxCharsPerWord)) ? Number(q.wordcloudMaxCharsPerWord) : 20;
 
-      if (wcLabel) wcLabel.textContent = `Skriv inntil ${maxWords} ord (maks ${maxChars} tegn per ord)`;
+      if (wcLabel) wcLabel.textContent = q.wordcloudLabel || "Skriv inntil 3 ord";
 
-      [wc1, wc2, wc3].forEach((el, i) => {
-        if (!el) return;
-        el.maxLength = maxChars;
+      wcInputs.innerHTML = "";
+      Array.from({ length: maxWords }).forEach((_, i) => {
+        const el = document.createElement("input");
+        el.type = "text";
+        el.className = "input";
+        el.maxLength = maxCharsPerWord;
         el.value = "";
         el.placeholder =
           i === 0 ? "Ord 1"
           : i === 1 ? "Ord 2 (valgfritt)"
           : "Ord 3 (valgfritt)";
+        wcInputs.appendChild(el);
       });
     }
 
-    // -------------------------
-    // State listener
-    // -------------------------
-    stateRef.onSnapshot(doc => {
-      if (!doc.exists) return;
-      const d = doc.data() || {};
+    function normalizeStatus(d) {
+      const s = (d && d.status) ? String(d.status) : "";
+      if (s === "idle" || s === "collect" || s === "results" || s === "paused") return s;
 
-      const newMode = d.mode ?? null;
-      const newRound = d.round ?? null;
+      // Bakoverkompat
+      if (d && d.showResults === true) return "results";
+      if (d && d.mode) return "collect";
+      return "idle";
+    }
 
-      // NY
-      const newQuestion = d.question || null;
+    async function forceResync(reason) {
+      try {
+        if (stateUnsub) { try { stateUnsub(); } catch(_) {} stateUnsub = null; }
+        await stateRef.get();
+      } catch (_) {}
+      attachStateListener();
+    }
 
-      const changed = (newMode !== mode || newRound !== round);
+    function attachStateListener() {
+      if (stateUnsub) { try { stateUnsub(); } catch(_) {} stateUnsub = null; }
 
-      mode = newMode;
-      round = newRound;
-      activeQuestion = newQuestion;
+      stateUnsub = stateRef.onSnapshot(doc => {
+        if (!doc.exists) return;
+        const d = doc.data() || {};
 
-      if (changed) {
-        hasVoted = false;
-        resetUI();
-      }
+        lastStateUpdateMs = Date.now();
 
-      setTitle();
+        const newMode = d.mode ?? null;
+        const newRound = d.round ?? null;
+        const newRoundId = d.roundId ?? (Number.isFinite(newRound) ? ("round_" + newRound) : null);
+        const newStatus = normalizeStatus(d);
 
-      if (presenterOk()) {
+        // NY
+        const newQuestion = d.question || null;
+
+        const changed = (newMode !== mode || newRound !== round || newStatus !== status);
+
+        mode = newMode;
+        round = newRound;
+        roundId = newRoundId;
+        status = newStatus;
+        activeQuestion = newQuestion;
+
+        if (changed) {
+          hasVoted = false;
+          resetUI();
+        }
+
+        setTitle();
+
         render();
         applyPresenterGate();
-      } else {
-        applyPresenterGate();
-      }
+      });
+    }
+
+    attachStateListener();
+
+    // Mobil resync / reconnect
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) forceResync("visibilitychange");
     });
 
-    // -------------------------
-    // Render
-    // -------------------------
+    // Watchdog
+    setInterval(() => {
+      const now = Date.now();
+      if (!lastStateUpdateMs) return;
+      if ((now - lastStateUpdateMs) > 10000) forceResync("watchdog");
+    }, 1000);
+
     function render() {
       hideAll();
       setTitle();
 
-      if (!presenterOk()) {
-        waitingBox.classList.remove("hidden");
-        waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
-        setMsg("");
-        return;
-      }
+      // Debug-UI: entydige labels
+      const label =
+        (status === "idle")   ? "IDLE – før start (Vi er straks i gang!)" :
+        (status === "collect") ? "COLLECT – aktiv innsamling (Svar samles inn!)" :
+        (status === "results") ? "RESULTS – viser resultater" :
+        "PAUSED – bytter spørsmål/modus (mellomtilstand)";
 
-      if (!mode) {
+      if (!presenterOk() || status === "idle" || status === "paused" || status === "results" || !mode) {
         waitingBox.classList.remove("hidden");
-        waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
+        waitingBox.textContent = label;
         if (!hasVoted) setMsg("");
         return;
       }
 
+      // status === "collect" og foreleser er "alive"
       waitingBox.classList.add("hidden");
       if (!hasVoted) setMsg("");
 
-      const isLikert = (mode === CONFIG.MODES.LIKERT);
-      const isOpen = (mode === CONFIG.MODES.OPEN);
-      const isWc = (mode === CONFIG.MODES.WORDCLOUD);
+      if (mode === CONFIG.MODES.OPEN) {
+        openBox.classList.remove("hidden");
+        setupOpen();
+        return;
+      }
 
-      const isMulti =
-        (mode === CONFIG.MODES.MULTI) ||
-        (mode === CONFIG.MODES.SBS) ||
-        (mode === CONFIG.MODES.BNR) ||
-        (mode === CONFIG.MODES.ABC) ||
-        (mode === CONFIG.MODES.YESNO);
+      if (mode === CONFIG.MODES.WORDCLOUD) {
+        wcBox.classList.remove("hidden");
+        setupWordcloud();
+        return;
+      }
 
-      if (isMulti) { show("multiBox"); return; }
-      if (isLikert) { show("likertBox"); return; }
-      if (isOpen) { show("openBox"); return; }
-      if (isWc) { show("wcBox"); return; }
+      if (mode === CONFIG.MODES.LIKERT) {
+        likertBox.classList.remove("hidden");
+        buildLikertGrid();
+        return;
+      }
 
-      waitingBox.classList.remove("hidden");
-      waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
+      // MULTI (inkl presets + opplegg)
+      multiBox.classList.remove("hidden");
+      renderDynamicMulti();
     }
 
-    function resetUI() {
-      setMsg("");
+    async function voteDynamic(optId) {
+      if (hasVoted) return;
+      hasVoted = true;
 
-      rebuildMultiButtons();
-      rebuildLikertButtons();
-      applyOpenConfig();
-      applyWcConfig();
-
-      // respekter gate umiddelbart
-      if (presenterOk()) freezeVotedUI(false);
-      else applyPresenterGate();
+      try {
+        const path = "counts." + String(optId);
+        await pollRef.set({ [path]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+        setMsg("Takk! ✅");
+      } catch (e) {
+        hasVoted = false;
+        setMsg("Feil. Prøv igjen.");
+      }
     }
 
-    // -------------------------
-    // Actions
-    // -------------------------
-    async function voteMulti(optionId) {
-  if (!presenterOk()) { applyPresenterGate(); return; }
-  if (hasVoted) return;
-
-  hasVoted = true;
-  freezeVotedUI(true);
-
-  try {
-    const safeId = ProgramUtil.toSafeKey(optionId, "o0");
-    const fieldPath = `counts.${safeId}`;
-
-    // 1) Riktig måte: update() støtter "field paths"
-    await pollRef.update({
-      [fieldPath]: firebase.firestore.FieldValue.increment(1)
-    });
-
-    setMsg(CONFIG.TEXT.VOTE_OK);
-  } catch (err) {
-    // 2) Fallback hvis doc ikke finnes (update feiler på non-existing doc)
-    try {
-      const safeId = ProgramUtil.toSafeKey(optionId, "o0");
-      await pollRef.set({
-        counts: { [safeId]: 1 }
-      }, { merge: true });
-
-      setMsg(CONFIG.TEXT.VOTE_OK);
-    } catch (err2) {
-      hasVoted = false;
-      freezeVotedUI(false);
-      setMsg(CONFIG.TEXT.TRY_AGAIN);
-    }
-  }
-}
-
-    async function voteLikert(value, btn) {
-      if (!presenterOk()) { applyPresenterGate(); return; }
+    async function voteLikert(v) {
       if (hasVoted) return;
 
       hasVoted = true;
@@ -451,116 +362,103 @@
 
       try {
         await pollRef.set({
-          likertSum: firebase.firestore.FieldValue.increment(value),
+          likertSum: firebase.firestore.FieldValue.increment(Number(v) || 0),
           likertCount: firebase.firestore.FieldValue.increment(1)
         }, { merge: true });
 
-        // marker valgt knapp
-        document.querySelectorAll(".likert-btn").forEach(b => {
-          b.disabled = true;
-          b.classList.add("disabled");
-          if (b === btn) b.classList.add("selected");
-        });
-
-        setMsg(CONFIG.TEXT.VOTE_OK);
-      } catch (err) {
+        setMsg("Takk! ✅");
+      } catch (e) {
         hasVoted = false;
         freezeVotedUI(false);
-        document.querySelectorAll(".likert-btn").forEach(b => {
-          b.disabled = false;
-          b.classList.remove("disabled", "selected");
-        });
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
+        setMsg("Feil. Prøv igjen.");
       }
     }
 
-    async function sendOpenAnswer() {
-      if (!presenterOk()) { applyPresenterGate(); return; }
+    async function sendOpen() {
       if (hasVoted) return;
 
-      const text = (openText?.value || "").trim();
-      if (!text) { setMsg(CONFIG.TEXT.WRITE_SOMETHING); return; }
+      const text = (openText.value || "").trim();
+      const q = activeQuestion || {};
+      const maxChars = Number.isFinite(Number(q.openMaxChars)) ? Number(q.openMaxChars) : CONFIG.LIMITS.OPEN_MAX_CHARS;
 
-      const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
+      if (!text) return;
 
       hasVoted = true;
       freezeVotedUI(true);
 
       try {
-        const roundId = "round_" + (round ?? 0);
+        const rid = roundId || ("round_" + (round ?? 0));
         await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
-          .doc(roundId)
+          .doc(rid)
           .collection("answers")
           .add({
             text: text.slice(0, maxChars),
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        setMsg(CONFIG.TEXT.VOTE_OK);
-      } catch (err) {
+        setMsg("Takk! ✅");
+      } catch (e) {
         hasVoted = false;
         freezeVotedUI(false);
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
+        setMsg("Feil. Prøv igjen.");
       }
     }
 
-    async function sendWordCloud() {
-      if (!presenterOk()) { applyPresenterGate(); return; }
+    async function sendWordcloud() {
       if (hasVoted) return;
 
-      const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
-      const maxChars = Number.isFinite(activeQuestion?.wordcloud?.maxCharsPerWord) ? activeQuestion.wordcloud.maxCharsPerWord : CONFIG.LIMITS.WORD_MAX_CHARS;
+      const words = Array.from(wcInputs.querySelectorAll("input"))
+        .map(i => (i.value || "").trim())
+        .filter(Boolean);
 
-      const raw = [wc1?.value, wc2?.value, wc3?.value];
-      const w = raw.map(x => sanitizeWord(x, maxChars)).filter(Boolean).slice(0, maxWords);
-
-      if (!w.length) { setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD); return; }
+      if (!words.length) return;
 
       hasVoted = true;
       freezeVotedUI(true);
 
       try {
-        const roundId = "round_" + (round ?? 0);
+        const rid = roundId || ("round_" + (round ?? 0));
         await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
-          .doc(roundId)
+          .doc(rid)
           .collection("answers")
           .add({
-            words: w,
+            words,
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        setMsg(CONFIG.TEXT.VOTE_OK);
-      } catch (err) {
+        setMsg("Takk! ✅");
+      } catch (e) {
         hasVoted = false;
         freezeVotedUI(false);
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
+        setMsg("Feil. Prøv igjen.");
       }
     }
 
-    // -------------------------
-    // misc
-    // -------------------------
-    function hideAll() {
-      ["multiBox","likertBox","openBox","wcBox"].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add("hidden");
+    function freezeVotedUI(isFrozen) {
+      // behold eksisterende enkel gating
+      const btns = document.querySelectorAll("button, input, textarea");
+      btns.forEach(b => {
+        if (b.id === "openText") return;
+        if (typeof b.disabled === "boolean") b.disabled = !!isFrozen;
       });
-      waitingBox.classList.add("hidden");
+
+      if (openText) openText.disabled = !!isFrozen;
     }
 
-    function show(id) {
-      const el = document.getElementById(id);
-      if (el) el.classList.remove("hidden");
+    function escapeHtml(s) {
+      return (s || "")
+        .toString()
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
     }
-
-    function setMsg(text) {
-      msgEl.textContent = text;
-    }
-
-    // init
-    resetUI();
+    function escapeAttr(s) { return escapeHtml(s).replaceAll("\n", " "); }
   </script>
 </body>
 </html>
+
+
 
 
