@@ -13,46 +13,16 @@
 
     <div id="waitingBox">Vi er straks i gang!</div>
 
-    <!-- SBS -->
-    <div id="sbsBox" class="hidden">
-      <div class="choice-stack">
-        <button class="choice sbs-green"  onclick="voteABC('A')">Sunn</button>
-        <button class="choice sbs-yellow" onclick="voteABC('B')">Bekymringsfull</button>
-        <button class="choice sbs-red"    onclick="voteABC('C')">Skadelig</button>
-      </div>
-    </div>
-
-    <!-- BNR -->
-    <div id="bnrBox" class="hidden">
-      <div class="choice-stack">
-        <button class="choice sbs-green"  onclick="voteABC('A')">Beskyttende</button>
-        <button class="choice sbs-yellow" onclick="voteABC('B')">Nøytral</button>
-        <button class="choice sbs-red"    onclick="voteABC('C')">Risiko</button>
-      </div>
-    </div>
-
-    <!-- ABC -->
-    <div id="abcBox" class="hidden">
-      <div class="choice-stack">
-        <button class="choice sbs-green"  onclick="voteABC('A')">A</button>
-        <button class="choice sbs-yellow" onclick="voteABC('B')">B</button>
-        <button class="choice sbs-red"    onclick="voteABC('C')">C</button>
-      </div>
-    </div>
-
-    <!-- JA/NEI -->
-    <div id="jnBox" class="hidden">
-      <div class="choice-stack">
-        <button class="choice sbs-green" onclick="voteABC('A')">Ja</button>
-        <button class="choice sbs-red"   onclick="voteABC('B')">Nei</button>
-      </div>
+    <!-- MULTI (dynamisk: 2+ valg, inkl SBS/BNR/ABC/YESNO + oppleggsflervalg) -->
+    <div id="multiBox" class="hidden">
+      <div class="choice-stack" id="multiChoices"></div>
     </div>
 
     <!-- LIKERT -->
     <div id="likertBox" class="hidden">
       <div class="likert-wrap">
-        <div class="likert-scale-label">
-          0 = lavt &nbsp; | &nbsp; 10 = høyt
+        <div class="likert-scale-label" id="likertScaleLabel">
+          Skala
         </div>
         <div class="likert-grid" id="likertGrid"></div>
       </div>
@@ -61,7 +31,7 @@
     <!-- OPEN-ENDED -->
     <div id="openBox" class="hidden">
       <div class="box-wrap">
-        <label for="openText" class="label">Skriv et kort svar (maks 200 tegn)</label>
+        <label for="openText" class="label" id="openLabel">Skriv et kort svar</label>
         <textarea id="openText" rows="4" maxlength="200"></textarea>
 
         <div class="row">
@@ -76,7 +46,7 @@
     <!-- WORD CLOUD -->
     <div id="wcBox" class="hidden">
       <div class="box-wrap">
-        <div class="label">Skriv inntil 3 ord (maks 20 tegn per ord)</div>
+        <div class="label" id="wcLabel">Skriv ord</div>
 
         <div class="wc-grid">
           <input id="wc1" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 1">
@@ -111,23 +81,29 @@
     let round = null;
     let hasVoted = false;
 
-    // question title from state
-    let questionTitle = null;
+    // NY: aktivt spørsmål (kilde til sannhet)
+    let activeQuestion = null;
 
     // DOM refs
     const titleEl = document.getElementById("title");
     const waitingBox = document.getElementById("waitingBox");
     const msgEl = document.getElementById("msg");
+
+    const multiChoices = document.getElementById("multiChoices");
+
     const likertGrid = document.getElementById("likertGrid");
+    const likertScaleLabel = document.getElementById("likertScaleLabel");
 
     const openText = document.getElementById("openText");
     const openCount = document.getElementById("openCount");
     const openSendBtn = document.getElementById("openSendBtn");
+    const openLabel = document.getElementById("openLabel");
 
     const wc1 = document.getElementById("wc1");
     const wc2 = document.getElementById("wc2");
     const wc3 = document.getElementById("wc3");
     const wcSendBtn = document.getElementById("wcSendBtn");
+    const wcLabel = document.getElementById("wcLabel");
 
     const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
 
@@ -163,13 +139,10 @@
         waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
         setMsg("");
         setAllInputsDisabled(true);
-        setTitle(); // show best available title even when waiting
+        setTitle();
         return;
       }
 
-      // Presenter ok:
-      // - har stemt: hold fryst
-      // - ikke stemt: enable
       if (hasVoted) freezeVotedUI(true);
       else freezeVotedUI(false);
 
@@ -186,7 +159,8 @@
         [CONFIG.MODES.BNR]: "Beskyttende, nøytral eller risiko",
         [CONFIG.MODES.ABC]: "A, B eller C",
         [CONFIG.MODES.YESNO]: "JA eller NEI",
-        [CONFIG.MODES.LIKERT]: "Skala fra 0 til 10",
+        [CONFIG.MODES.MULTI]: "Flervalg",
+        [CONFIG.MODES.LIKERT]: "Skala",
         [CONFIG.MODES.OPEN]: "Åpne svar",
         [CONFIG.MODES.WORDCLOUD]: "Ordsky"
       };
@@ -194,13 +168,8 @@
     }
 
     function setTitle() {
-      const qt = (questionTitle || "").toString().trim();
-      if (qt) {
-        titleEl.textContent = qt;
-        return;
-      }
-
-      // fallback: mode label or plain "Avstemning"
+      const qt = (activeQuestion?.title || "").toString().trim();
+      if (qt) { titleEl.textContent = qt; return; }
       if (mode) titleEl.textContent = niceModeLabel(mode);
       else titleEl.textContent = "Avstemning";
     }
@@ -208,12 +177,6 @@
     // -------------------------
     // UI helpers
     // -------------------------
-    if (openText && openCount) {
-      openText.addEventListener("input", () => {
-        openCount.textContent = (openText.value.length || 0) + " / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
-      });
-    }
-
     function setOpenDisabled(disabled) {
       if (openText) openText.disabled = disabled;
       if (openSendBtn) openSendBtn.disabled = disabled;
@@ -225,56 +188,130 @@
     }
 
     function setAllInputsDisabled(disabled) {
-      ["sbsBox","bnrBox","abcBox","jnBox"].forEach(id => {
-        const box = document.getElementById(id);
-        if (!box) return;
-        box.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
-      });
+      // multi
+      if (multiChoices) multiChoices.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
 
+      // likert
       document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
+
+      // open/wc
       setOpenDisabled(disabled);
       setWcDisabled(disabled);
     }
 
     function freezeVotedUI(freeze) {
       if (freeze) {
-        disableActiveChoiceButtons(true);
-        document.querySelectorAll(".likert-btn").forEach(b => b.disabled = true);
-        setOpenDisabled(true);
-        setWcDisabled(true);
+        setAllInputsDisabled(true);
       } else {
         if (!presenterOk()) return;
-        disableActiveChoiceButtons(false);
-        document.querySelectorAll(".likert-btn").forEach(b => b.disabled = false);
-        setOpenDisabled(false);
-        setWcDisabled(false);
+        setAllInputsDisabled(false);
       }
     }
 
-    function sanitizeWord(raw) {
+    function sanitizeWord(raw, maxChars) {
       const s = (raw || "").toLowerCase().trim();
       if (!s) return "";
       let cleaned = s.replace(/[^a-zæøå\-]/g, "");
       cleaned = cleaned.replace(/^\-+|\-+$/g, "");
       if (!cleaned) return "";
       if (STOPWORDS.has(cleaned)) return "";
-      if (cleaned.length > CONFIG.LIMITS.WORD_MAX_CHARS) cleaned = cleaned.slice(0, CONFIG.LIMITS.WORD_MAX_CHARS);
+      const cap = Number.isFinite(maxChars) ? maxChars : CONFIG.LIMITS.WORD_MAX_CHARS;
+      if (cleaned.length > cap) cleaned = cleaned.slice(0, cap);
       return cleaned;
     }
 
-    // Likert buttons
-    buildLikertButtons();
-    function buildLikertButtons() {
+    function getMultiOptionsForRender() {
+      if (activeQuestion?.options && Array.isArray(activeQuestion.options) && activeQuestion.options.length >= 2) {
+        return activeQuestion.options;
+      }
+      const preset = ProgramUtil.multiPresetForMode(mode);
+      if (preset?.options) return preset.options;
+      return [
+        { id:"a", label:"A", color:"var(--sbs-green)" },
+        { id:"b", label:"B", color:"var(--sbs-yellow)" },
+        { id:"c", label:"C", color:"var(--sbs-red)" }
+      ];
+    }
+
+    function rebuildMultiButtons() {
+      if (!multiChoices) return;
+      const opts = getMultiOptionsForRender();
+      multiChoices.innerHTML = "";
+
+      opts.forEach((opt, idx) => {
+        const id = (opt?.id || ("o" + idx)).toString();
+        const label = (opt?.label ?? ("Valg " + (idx + 1))).toString();
+
+        const btn = document.createElement("button");
+        btn.className = "choice";
+        btn.textContent = label;
+
+        // farge fra edit (hex eller var(--...))
+        if (opt?.color) btn.style.background = opt.color;
+
+        btn.addEventListener("click", () => voteMulti(id));
+        multiChoices.appendChild(btn);
+      });
+    }
+
+    function rebuildLikertButtons() {
       if (!likertGrid) return;
+      const qLik = activeQuestion?.likert || null;
+
+      const min = Number.isFinite(qLik?.min) ? qLik.min : 0;
+      const max = Number.isFinite(qLik?.max) ? qLik.max : 10;
+
       likertGrid.innerHTML = "";
-      for (let i = 10; i >= 0; i--) {
+
+      // label over
+      if (likertScaleLabel) {
+        const left = (qLik?.minLabel || String(min)).toString();
+        const right = (qLik?.maxLabel || String(max)).toString();
+        likertScaleLabel.textContent = `${min} = ${left}   |   ${max} = ${right}`;
+      }
+
+      // bygger knapper fra max til min (som før)
+      for (let v = max; v >= min; v--) {
         const btn = document.createElement("button");
         btn.className = "likert-btn";
-        btn.textContent = i;
-        btn.dataset.value = i;
-        btn.addEventListener("click", () => voteLikert(i, btn));
+        btn.textContent = v;
+        btn.dataset.value = String(v);
+        btn.addEventListener("click", () => voteLikert(v, btn));
         likertGrid.appendChild(btn);
       }
+    }
+
+    function applyOpenConfig() {
+      const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
+
+      if (openText) openText.maxLength = maxChars;
+      if (openLabel) openLabel.textContent = `Skriv et kort svar (maks ${maxChars} tegn)`;
+
+      if (openCount) openCount.textContent = `0 / ${maxChars}`;
+      if (openText) openText.value = "";
+
+      if (openText && openCount) {
+        openText.oninput = () => {
+          openCount.textContent = (openText.value.length || 0) + " / " + maxChars;
+        };
+      }
+    }
+
+    function applyWcConfig() {
+      const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
+      const maxChars = Number.isFinite(activeQuestion?.wordcloud?.maxCharsPerWord) ? activeQuestion.wordcloud.maxCharsPerWord : CONFIG.LIMITS.WORD_MAX_CHARS;
+
+      if (wcLabel) wcLabel.textContent = `Skriv inntil ${maxWords} ord (maks ${maxChars} tegn per ord)`;
+
+      [wc1, wc2, wc3].forEach((el, i) => {
+        if (!el) return;
+        el.maxLength = maxChars;
+        el.value = "";
+        el.placeholder =
+          i === 0 ? "Ord 1"
+          : i === 1 ? "Ord 2 (valgfritt)"
+          : "Ord 3 (valgfritt)";
+      });
     }
 
     // -------------------------
@@ -287,14 +324,14 @@
       const newMode = d.mode ?? null;
       const newRound = d.round ?? null;
 
-      // NEW: title from state
-      const newQuestionTitle = (d.questionTitle ?? null);
+      // NY
+      const newQuestion = d.question || null;
 
       const changed = (newMode !== mode || newRound !== round);
 
       mode = newMode;
       round = newRound;
-      questionTitle = newQuestionTitle;
+      activeQuestion = newQuestion;
 
       if (changed) {
         hasVoted = false;
@@ -303,7 +340,6 @@
 
       setTitle();
 
-      // Ikke tving render hvis presenter er borte; gate styrer visning
       if (presenterOk()) {
         render();
         applyPresenterGate();
@@ -317,7 +353,6 @@
     // -------------------------
     function render() {
       hideAll();
-
       setTitle();
 
       if (!presenterOk()) {
@@ -337,65 +372,33 @@
       waitingBox.classList.add("hidden");
       if (!hasVoted) setMsg("");
 
-      if (mode === CONFIG.MODES.SBS)       { show("sbsBox"); return; }
-      if (mode === CONFIG.MODES.BNR)       { show("bnrBox"); return; }
-      if (mode === CONFIG.MODES.ABC)       { show("abcBox"); return; }
-      if (mode === CONFIG.MODES.YESNO)     { show("jnBox");  return; }
-      if (mode === CONFIG.MODES.LIKERT)    { show("likertBox"); return; }
-      if (mode === CONFIG.MODES.OPEN)      { show("openBox"); return; }
-      if (mode === CONFIG.MODES.WORDCLOUD) { show("wcBox"); return; }
+      const isLikert = (mode === CONFIG.MODES.LIKERT);
+      const isOpen = (mode === CONFIG.MODES.OPEN);
+      const isWc = (mode === CONFIG.MODES.WORDCLOUD);
+
+      const isMulti =
+        (mode === CONFIG.MODES.MULTI) ||
+        (mode === CONFIG.MODES.SBS) ||
+        (mode === CONFIG.MODES.BNR) ||
+        (mode === CONFIG.MODES.ABC) ||
+        (mode === CONFIG.MODES.YESNO);
+
+      if (isMulti) { show("multiBox"); return; }
+      if (isLikert) { show("likertBox"); return; }
+      if (isOpen) { show("openBox"); return; }
+      if (isWc) { show("wcBox"); return; }
 
       waitingBox.classList.remove("hidden");
       waitingBox.textContent = CONFIG.TEXT.WAITING_DEFAULT || "Vi er straks i gang!";
     }
 
-    function getActiveBoxElement() {
-      if (!mode) return null;
-      if (mode === CONFIG.MODES.SBS) return document.getElementById("sbsBox");
-      if (mode === CONFIG.MODES.BNR) return document.getElementById("bnrBox");
-      if (mode === CONFIG.MODES.ABC) return document.getElementById("abcBox");
-      if (mode === CONFIG.MODES.YESNO) return document.getElementById("jnBox");
-      if (mode === CONFIG.MODES.LIKERT) return document.getElementById("likertBox");
-      if (mode === CONFIG.MODES.OPEN) return document.getElementById("openBox");
-      if (mode === CONFIG.MODES.WORDCLOUD) return document.getElementById("wcBox");
-      return null;
-    }
-
-    function disableActiveChoiceButtons(disable) {
-      const box = getActiveBoxElement();
-      if (!box) return;
-      box.querySelectorAll("button.choice").forEach(b => b.disabled = disable);
-    }
-
-    function lockLikertButtons(selectedBtn) {
-      document.querySelectorAll(".likert-btn").forEach(b => {
-        b.disabled = true;
-        b.classList.add("disabled");
-        if (b === selectedBtn) b.classList.add("selected");
-      });
-    }
-
-    function unlockLikertButtons() {
-      if (!presenterOk()) return;
-      document.querySelectorAll(".likert-btn").forEach(b => {
-        b.disabled = false;
-        b.classList.remove("disabled", "selected");
-      });
-    }
-
     function resetUI() {
-      if (openText && openCount) {
-        openText.value = "";
-        openCount.textContent = "0 / " + CONFIG.LIMITS.OPEN_MAX_CHARS;
-      }
-      if (wc1) wc1.value = "";
-      if (wc2) wc2.value = "";
-      if (wc3) wc3.value = "";
+      setMsg("");
 
-      setOpenDisabled(false);
-      setWcDisabled(false);
-      disableActiveChoiceButtons(false);
-      unlockLikertButtons();
+      rebuildMultiButtons();
+      rebuildLikertButtons();
+      applyOpenConfig();
+      applyWcConfig();
 
       // respekter gate umiddelbart
       if (presenterOk()) freezeVotedUI(false);
@@ -405,7 +408,7 @@
     // -------------------------
     // Actions
     // -------------------------
-    async function voteABC(option) {
+    async function voteMulti(optionId) {
       if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
@@ -413,10 +416,14 @@
       freezeVotedUI(true);
 
       try {
+        const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+        const fieldPath = "counts." + safeId;
+
         await pollRef.set(
-          { [option]: firebase.firestore.FieldValue.increment(1) },
+          { [fieldPath]: firebase.firestore.FieldValue.increment(1) },
           { merge: true }
         );
+
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
@@ -430,7 +437,7 @@
       if (hasVoted) return;
 
       hasVoted = true;
-      lockLikertButtons(btn);
+      freezeVotedUI(true);
 
       try {
         await pollRef.set({
@@ -438,10 +445,21 @@
           likertCount: firebase.firestore.FieldValue.increment(1)
         }, { merge: true });
 
+        // marker valgt knapp
+        document.querySelectorAll(".likert-btn").forEach(b => {
+          b.disabled = true;
+          b.classList.add("disabled");
+          if (b === btn) b.classList.add("selected");
+        });
+
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
-        unlockLikertButtons();
+        freezeVotedUI(false);
+        document.querySelectorAll(".likert-btn").forEach(b => {
+          b.disabled = false;
+          b.classList.remove("disabled", "selected");
+        });
         setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
@@ -453,6 +471,8 @@
       const text = (openText?.value || "").trim();
       if (!text) { setMsg(CONFIG.TEXT.WRITE_SOMETHING); return; }
 
+      const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
+
       hasVoted = true;
       freezeVotedUI(true);
 
@@ -462,7 +482,7 @@
           .doc(roundId)
           .collection("answers")
           .add({
-            text: text.slice(0, CONFIG.LIMITS.OPEN_MAX_CHARS),
+            text: text.slice(0, maxChars),
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
@@ -478,7 +498,12 @@
       if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
-      const w = [sanitizeWord(wc1?.value), sanitizeWord(wc2?.value), sanitizeWord(wc3?.value)].filter(Boolean);
+      const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
+      const maxChars = Number.isFinite(activeQuestion?.wordcloud?.maxCharsPerWord) ? activeQuestion.wordcloud.maxCharsPerWord : CONFIG.LIMITS.WORD_MAX_CHARS;
+
+      const raw = [wc1?.value, wc2?.value, wc3?.value];
+      const w = raw.map(x => sanitizeWord(x, maxChars)).filter(Boolean).slice(0, maxWords);
+
       if (!w.length) { setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD); return; }
 
       hasVoted = true;
@@ -506,7 +531,7 @@
     // misc
     // -------------------------
     function hideAll() {
-      ["sbsBox","bnrBox","abcBox","jnBox","likertBox","openBox","wcBox"].forEach(id => {
+      ["multiBox","likertBox","openBox","wcBox"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add("hidden");
       });
@@ -521,12 +546,9 @@
     function setMsg(text) {
       msgEl.textContent = text;
     }
+
+    // init
+    resetUI();
   </script>
 </body>
 </html>
-
-
-
-
-
-
