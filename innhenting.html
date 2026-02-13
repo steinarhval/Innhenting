@@ -20,13 +20,11 @@
 
     <!-- LIKERT -->
     <div id="likertBox" class="hidden">
-      <div class="box-wrap">
-        <div class="likert-wrap">
-          <div class="likert-scale-label" id="likertScaleLabel">
-            Skala
-          </div>
-          <div class="likert-grid" id="likertGrid"></div>
+      <div class="likert-wrap">
+        <div class="likert-scale-label" id="likertScaleLabel">
+          Skala
         </div>
+        <div class="likert-grid" id="likertGrid"></div>
       </div>
     </div>
 
@@ -34,24 +32,41 @@
     <div id="openBox" class="hidden">
       <div class="box-wrap">
         <label for="openText" class="label" id="openLabel">Skriv et kort svar</label>
-        <textarea id="openText" rows="4" class="textarea" placeholder=""></textarea>
-        <div class="row between" style="margin-top:.6rem;">
-          <div class="muted" id="openCounter"></div>
-          <button class="btn btn--success" id="openSendBtn" onclick="sendOpen()">Send</button>
+        <textarea id="openText" rows="4" maxlength="200"></textarea>
+
+        <div class="row">
+          <div id="openCount" class="counter">0 / 200</div>
+          <button id="openSendBtn" class="btn btn--success btn--compact" onclick="sendOpenAnswer()">
+            Send
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- WORDCLOUD -->
+    <!-- WORD CLOUD -->
     <div id="wcBox" class="hidden">
       <div class="box-wrap">
-        <div class="label" id="wcLabel">Skriv inntil 3 ord</div>
-        <div id="wcInputs" class="wcInputs"></div>
-        <button class="btn btn--success" style="margin-top:.6rem;" onclick="sendWordcloud()">Send</button>
+        <div class="label" id="wcLabel">Skriv ord</div>
+
+        <div class="wc-grid">
+          <input id="wc1" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 1">
+          <input id="wc2" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 2 (valgfritt)">
+          <input id="wc3" class="wc-input" type="text" maxlength="20" autocomplete="off" placeholder="Ord 3 (valgfritt)">
+        </div>
+
+        <div class="row row--end">
+          <button id="wcSendBtn" class="btn btn--success btn--compact" onclick="sendWordCloud()">
+            Send
+          </button>
+        </div>
+
+        <div class="hint">
+          Tips: Ett ord per felt. Bindestrek er ok. Tall og emojis blir ignorert.
+        </div>
       </div>
     </div>
 
-    <div id="msg" class="msg hidden"></div>
+    <div id="msg"></div>
   </div>
 
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -68,9 +83,10 @@
     let status = "idle";
     let hasVoted = false;
 
-    // resync / reconnect
+    // resync
     let stateUnsub = null;
     let lastStateUpdateMs = 0;
+    let watchdogTimer = null;
 
     // NY: aktivt spørsmål (kilde til sannhet)
     let activeQuestion = null;
@@ -80,281 +96,413 @@
     const waitingBox = document.getElementById("waitingBox");
     const msgEl = document.getElementById("msg");
 
-    // boxes
-    const multiBox = document.getElementById("multiBox");
-    const likertBox = document.getElementById("likertBox");
-    const openBox = document.getElementById("openBox");
-    const wcBox = document.getElementById("wcBox");
-
-    // multi
     const multiChoices = document.getElementById("multiChoices");
 
-    // likert
     const likertGrid = document.getElementById("likertGrid");
     const likertScaleLabel = document.getElementById("likertScaleLabel");
 
-    // open
     const openText = document.getElementById("openText");
-    const openCounter = document.getElementById("openCounter");
-    const openLabel = document.getElementById("openLabel");
+    const openCount = document.getElementById("openCount");
     const openSendBtn = document.getElementById("openSendBtn");
+    const openLabel = document.getElementById("openLabel");
 
-    // wordcloud
-    const wcInputs = document.getElementById("wcInputs");
+    const wc1 = document.getElementById("wc1");
+    const wc2 = document.getElementById("wc2");
+    const wc3 = document.getElementById("wc3");
+    const wcSendBtn = document.getElementById("wcSendBtn");
     const wcLabel = document.getElementById("wcLabel");
 
-    function setMsg(t) {
-      msgEl.textContent = (t || "");
-      msgEl.classList.toggle("hidden", !msgEl.textContent);
-    }
+    const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
 
-    function hideAll() {
-      multiBox.classList.add("hidden");
-      likertBox.classList.add("hidden");
-      openBox.classList.add("hidden");
-      wcBox.classList.add("hidden");
-    }
-
-    function resetUI() {
-      setMsg("");
-      if (openText) openText.value = "";
-      if (wcInputs) wcInputs.innerHTML = "";
-    }
-
-    function setTitle() {
-      const q = activeQuestion;
-      const t = q?.title || q?.questionTitle || null;
-      titleEl.textContent = t ? t : "Avstemning";
-    }
+    // -------------------------
+    // Presenter gate (presence)
+    // -------------------------
+    let presenterAliveFlag = true;
+    let lastPresenterMs = 0;
 
     function presenterOk() {
-      // “presenter heartbeat” – hvis foreleser ikke er aktiv: gate
-      const last = FirebaseUtil.getPresenterLastSeenMs();
-      const maxAge = CONFIG?.PRESENCE?.MAX_AGE_MS || 8000;
-      if (!last) return false;
-      return (Date.now() - last) <= maxAge;
+      const now = Date.now();
+      if (!presenterAliveFlag) return false;
+      if (!lastPresenterMs) return false;
+      return (now - lastPresenterMs) <= CONFIG.PRESENCE.TIMEOUT_MS;
     }
+
+    if (presenceRef) {
+      presenceRef.onSnapshot(snap => {
+        const d = snap.exists ? snap.data() : {};
+        presenterAliveFlag = (d?.alive !== false);
+        lastPresenterMs = d?.ts?.toMillis ? d.ts.toMillis() : 0;
+        applyPresenterGate();
+      });
+    }
+    setInterval(() => applyPresenterGate(), 1000);
 
     function applyPresenterGate() {
-      // behold eksisterende (ikke endre svarflyt her)
-    }
+      const ok = presenterOk();
 
-    function renderDynamicMulti() {
-      const q = activeQuestion;
-      const opts = Array.isArray(q?.options) ? q.options : [];
-
-      if (!opts.length) {
-        multiChoices.innerHTML = "";
+      if (!ok) {
+        hideAll();
+        waitingBox.classList.remove("hidden");
+        waitingBox.textContent = statusLabel("idle");
+        setMsg("");
+        setAllInputsDisabled(true);
+        setTitle();
         return;
       }
 
-      multiChoices.innerHTML = opts.map(o => {
-        const id = (o && o.id) ? String(o.id) : "";
-        const label = (o && o.label) ? String(o.label) : id;
-        const color = (o && o.color) ? String(o.color) : "";
+      if (hasVoted) freezeVotedUI(true);
+      else freezeVotedUI(false);
 
-        const safeLabel = escapeHtml(label || id);
-        const safeId = escapeAttr(id);
-
-        return `<button class="choice" style="${color ? ("background:" + escapeAttr(color) + ";") : ""}" onclick="voteDynamic('${safeId}')">${safeLabel}</button>`;
-      }).join("");
+      setTitle();
+      render();
     }
 
-    function buildLikertGrid() {
-      // bygger knapper for likert (behold eksisterende enkelhet)
-      const q = activeQuestion || {};
-      const min = Number.isFinite(Number(q.likertMin)) ? Number(q.likertMin) : 0;
-      const max = Number.isFinite(Number(q.likertMax)) ? Number(q.likertMax) : 10;
+    // -------------------------
+    // Title helper
+    // -------------------------
+    function statusLabel(st) {
+      if (st === "idle") return "IDLE – før start (Vi er straks i gang!)";
+      if (st === "collect") return "COLLECT – aktiv innsamling (Svar samles inn!)";
+      if (st === "results") return "RESULTS – viser resultater";
+      if (st === "paused") return "PAUSED – bytter spørsmål/modus (mellomtilstand)";
+      return "";
+    }
 
-      const minLabel = q.likertMinLabel || "";
-      const maxLabel = q.likertMaxLabel || "";
+    function niceModeLabel(m) {
+      const map = {
+        [CONFIG.MODES.SBS]: "Sunn, bekymringsfull eller skadelig",
+        [CONFIG.MODES.BNR]: "Beskyttende, nøytral eller risiko",
+        [CONFIG.MODES.ABC]: "A, B eller C",
+        [CONFIG.MODES.YESNO]: "JA eller NEI",
+        [CONFIG.MODES.MULTI]: "Flervalg",
+        [CONFIG.MODES.LIKERT]: "Skala",
+        [CONFIG.MODES.OPEN]: "Åpne svar",
+        [CONFIG.MODES.WORDCLOUD]: "Ordsky"
+      };
+      return map[m] || "Avstemning";
+    }
 
-      if (likertScaleLabel) {
-        likertScaleLabel.textContent = (minLabel || maxLabel) ? `${minLabel} – ${maxLabel}` : "Skala";
+    function setTitle() {
+      const qt = (activeQuestion?.title || "").toString().trim();
+      if (qt) { titleEl.textContent = qt; return; }
+      if (mode) titleEl.textContent = niceModeLabel(mode);
+      else titleEl.textContent = "Avstemning";
+    }
+
+    // -------------------------
+    // UI helpers
+    // -------------------------
+    function setOpenDisabled(disabled) {
+      if (openText) openText.disabled = disabled;
+      if (openSendBtn) openSendBtn.disabled = disabled;
+    }
+
+    function setWcDisabled(disabled) {
+      [wc1, wc2, wc3].forEach(x => { if (x) x.disabled = disabled; });
+      if (wcSendBtn) wcSendBtn.disabled = disabled;
+    }
+
+    function setAllInputsDisabled(disabled) {
+      // multi
+      if (multiChoices) multiChoices.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
+
+      // likert
+      document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
+
+      // open/wc
+      setOpenDisabled(disabled);
+      setWcDisabled(disabled);
+    }
+
+    function freezeVotedUI(freeze) {
+      if (freeze) {
+        setAllInputsDisabled(true);
+      } else {
+        if (!presenterOk()) return;
+        setAllInputsDisabled(false);
       }
+    }
+
+    function sanitizeWord(raw, maxChars) {
+      const s = (raw || "").toLowerCase().trim();
+      if (!s) return "";
+      let cleaned = s.replace(/[^a-zæøå\-]/g, "");
+      cleaned = cleaned.replace(/^\-+|\-+$/g, "");
+      if (!cleaned) return "";
+      if (STOPWORDS.has(cleaned)) return "";
+      const cap = Number.isFinite(maxChars) ? maxChars : CONFIG.LIMITS.WORD_MAX_CHARS;
+      if (cleaned.length > cap) cleaned = cleaned.slice(0, cap);
+      return cleaned;
+    }
+
+    function getMultiOptionsForRender() {
+      if (activeQuestion?.options && Array.isArray(activeQuestion.options) && activeQuestion.options.length >= 2) {
+        return activeQuestion.options;
+      }
+      const preset = ProgramUtil.multiPresetForMode(mode);
+      if (preset?.options) return preset.options;
+      return [
+        { id:"a", label:"A", color:"var(--sbs-green)" },
+        { id:"b", label:"B", color:"var(--sbs-yellow)" },
+        { id:"c", label:"C", color:"var(--sbs-red)" }
+      ];
+    }
+
+    function rebuildMultiButtons() {
+      if (!multiChoices) return;
+      const opts = getMultiOptionsForRender();
+      multiChoices.innerHTML = "";
+
+      opts.forEach((opt, idx) => {
+        const id = (opt?.id || ("o" + idx)).toString();
+        const label = (opt?.label ?? ("Valg " + (idx + 1))).toString();
+
+        const btn = document.createElement("button");
+        btn.className = "choice";
+        btn.textContent = label;
+
+        // farge fra edit (hex eller var(--...))
+        if (opt?.color) btn.style.background = opt.color;
+
+        btn.addEventListener("click", () => voteMulti(id));
+        multiChoices.appendChild(btn);
+      });
+    }
+
+    function rebuildLikertButtons() {
+      if (!likertGrid) return;
+      const qLik = activeQuestion?.likert || null;
+
+      const min = Number.isFinite(qLik?.min) ? qLik.min : 0;
+      const max = Number.isFinite(qLik?.max) ? qLik.max : 10;
 
       likertGrid.innerHTML = "";
-      for (let v = min; v <= max; v++) {
+
+      // label over
+      if (likertScaleLabel) {
+        const left = (qLik?.minLabel || String(min)).toString();
+        const right = (qLik?.maxLabel || String(max)).toString();
+        likertScaleLabel.textContent = `${min} = ${left}   |   ${max} = ${right}`;
+      }
+
+      // bygger knapper fra max til min (som før)
+      for (let v = max; v >= min; v--) {
         const btn = document.createElement("button");
         btn.className = "likert-btn";
-        btn.textContent = String(v);
-        btn.onclick = () => voteLikert(v);
+        btn.textContent = v;
+        btn.dataset.value = String(v);
+        btn.addEventListener("click", () => voteLikert(v, btn));
         likertGrid.appendChild(btn);
       }
     }
 
-    function setupOpen() {
-      const q = activeQuestion || {};
-      const maxChars = Number.isFinite(Number(q.openMaxChars)) ? Number(q.openMaxChars) : CONFIG.LIMITS.OPEN_MAX_CHARS;
+    function applyOpenConfig() {
+      const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
 
-      if (openLabel) openLabel.textContent = q.openLabel || "Skriv et kort svar";
       if (openText) openText.maxLength = maxChars;
+      if (openLabel) openLabel.textContent = `Skriv et kort svar (maks ${maxChars} tegn)`;
 
-      if (openCounter && openText) {
-        const update = () => {
-          const n = (openText.value || "").length;
-          openCounter.textContent = `${n}/${maxChars}`;
+      if (openCount) openCount.textContent = `0 / ${maxChars}`;
+      if (openText) openText.value = "";
+
+      if (openText && openCount) {
+        openText.oninput = () => {
+          openCount.textContent = (openText.value.length || 0) + " / " + maxChars;
         };
-        openText.oninput = update;
-        update();
-      }
-
-      if (openSendBtn) {
-        openSendBtn.disabled = false;
       }
     }
 
-    function setupWordcloud() {
-      const q = activeQuestion || {};
-      const maxWords = Number.isFinite(Number(q.wordcloudMaxWords)) ? Number(q.wordcloudMaxWords) : 3;
-      const maxCharsPerWord = Number.isFinite(Number(q.wordcloudMaxCharsPerWord)) ? Number(q.wordcloudMaxCharsPerWord) : 20;
+    function applyWcConfig() {
+      const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
+      const maxChars = Number.isFinite(activeQuestion?.wordcloud?.maxCharsPerWord) ? activeQuestion.wordcloud.maxCharsPerWord : CONFIG.LIMITS.WORD_MAX_CHARS;
 
-      if (wcLabel) wcLabel.textContent = q.wordcloudLabel || "Skriv inntil 3 ord";
+      if (wcLabel) wcLabel.textContent = `Skriv inntil ${maxWords} ord (maks ${maxChars} tegn per ord)`;
 
-      wcInputs.innerHTML = "";
-      Array.from({ length: maxWords }).forEach((_, i) => {
-        const el = document.createElement("input");
-        el.type = "text";
-        el.className = "input";
-        el.maxLength = maxCharsPerWord;
+      [wc1, wc2, wc3].forEach((el, i) => {
+        if (!el) return;
+        el.maxLength = maxChars;
         el.value = "";
         el.placeholder =
           i === 0 ? "Ord 1"
           : i === 1 ? "Ord 2 (valgfritt)"
           : "Ord 3 (valgfritt)";
-        wcInputs.appendChild(el);
       });
     }
 
-    function normalizeStatus(d) {
-      const s = (d && d.status) ? String(d.status) : "";
-      if (s === "idle" || s === "collect" || s === "results" || s === "paused") return s;
-
-      // Bakoverkompat
-      if (d && d.showResults === true) return "results";
-      if (d && d.mode) return "collect";
-      return "idle";
-    }
-
-    async function forceResync(reason) {
-      try {
-        if (stateUnsub) { try { stateUnsub(); } catch(_) {} stateUnsub = null; }
-        await stateRef.get();
-      } catch (_) {}
-      attachStateListener();
-    }
+    // -------------------------
+    // State listener
+    // -------------------------
+    attachStateListener();
+    setupResync();
 
     function attachStateListener() {
-      if (stateUnsub) { try { stateUnsub(); } catch(_) {} stateUnsub = null; }
-
+      if (stateUnsub) { try { stateUnsub(); } catch (_) {} stateUnsub = null; }
       stateUnsub = stateRef.onSnapshot(doc => {
-        if (!doc.exists) return;
-        const d = doc.data() || {};
+      if (!doc.exists) return;
+      const d = doc.data() || {};
+      lastStateUpdateMs = Date.now();
 
-        lastStateUpdateMs = Date.now();
+      // status + roundId (bakoverkompat)
+      roundId = d.roundId ?? (Number.isFinite(d.round) ? ("round_" + d.round) : null);
+      const rawStatus = (d.status || "").toString();
+      if (rawStatus === "collecting") status = "collect";
+      else if (rawStatus === "collect" || rawStatus === "results" || rawStatus === "paused" || rawStatus === "idle") status = rawStatus;
+      else status = (d.showResults === true ? "results" : ((d.mode ?? null) ? "collect" : "idle"));
 
-        const newMode = d.mode ?? null;
-        const newRound = d.round ?? null;
-        const newRoundId = d.roundId ?? (Number.isFinite(newRound) ? ("round_" + newRound) : null);
-        const newStatus = normalizeStatus(d);
+      // hold legacy showResults i sync (for gamle klienter)
+      if ((status === "results") !== (d.showResults === true)) {
+        try { stateRef.set({ showResults: (status === "results") }, { merge: true }); } catch (_) {}
+      }
 
-        // NY
-        const newQuestion = d.question || null;
+      const newMode = d.mode ?? null;
+      const newRound = d.round ?? null;
 
-        const changed = (newMode !== mode || newRound !== round || newStatus !== status);
+      // NY
+      const newQuestion = d.question || null;
 
-        mode = newMode;
-        round = newRound;
-        roundId = newRoundId;
-        status = newStatus;
-        activeQuestion = newQuestion;
+      const changed = (newMode !== mode || newRound !== round);
 
-        if (changed) {
-          hasVoted = false;
-          resetUI();
-        }
+      mode = newMode;
+      round = newRound;
+      activeQuestion = newQuestion;
 
-        setTitle();
+      if (changed) {
+        hasVoted = false;
+        resetUI();
+      }
 
+      setTitle();
+
+      if (presenterOk()) {
         render();
         applyPresenterGate();
-      });
+      } else {
+        applyPresenterGate();
+      }
+    });
     }
 
-    attachStateListener();
+    function forceResync() {
+      try { attachStateListener(); } catch (_) {}
+      try { stateRef.get(); } catch (_) {}
+    }
 
-    // Mobil resync / reconnect
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) forceResync("visibilitychange");
-    });
+    function setupResync() {
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) forceResync();
+      });
 
-    // Watchdog
-    setInterval(() => {
-      const now = Date.now();
-      if (!lastStateUpdateMs) return;
-      if ((now - lastStateUpdateMs) > 10000) forceResync("watchdog");
-    }, 1000);
+      if (watchdogTimer) clearInterval(watchdogTimer);
+      watchdogTimer = setInterval(() => {
+        const now = Date.now();
+        if (!lastStateUpdateMs) return;
+        const threshold = 8000 + Math.floor(Math.random() * 4000); // 8–12 sek
+        if ((now - lastStateUpdateMs) > threshold) forceResync();
+      }, 1000);
+    }
 
+    // -------------------------
+    // Render
+    // -------------------------
     function render() {
       hideAll();
       setTitle();
 
-      // Debug-UI: entydige labels
-      const label =
-        (status === "idle")   ? "IDLE – før start (Vi er straks i gang!)" :
-        (status === "collect") ? "COLLECT – aktiv innsamling (Svar samles inn!)" :
-        (status === "results") ? "RESULTS – viser resultater" :
-        "PAUSED – bytter spørsmål/modus (mellomtilstand)";
-
-      if (!presenterOk() || status === "idle" || status === "paused" || status === "results" || !mode) {
+      // Presenter gate først
+      if (!presenterOk()) {
         waitingBox.classList.remove("hidden");
-        waitingBox.textContent = label;
+        waitingBox.textContent = statusLabel("idle");
+        setMsg("");
+        setAllInputsDisabled(true);
+        return;
+      }
+
+      // IDLE / PAUSED / RESULTS => ventemodus uten input
+      if (!mode || status === "idle" || status === "paused" || status === "results") {
+        waitingBox.classList.remove("hidden");
+        waitingBox.textContent = statusLabel(status || "idle");
+        setAllInputsDisabled(true);
         if (!hasVoted) setMsg("");
         return;
       }
 
-      // status === "collect" og foreleser er "alive"
+      // COLLECT => vis riktig input-UI
       waitingBox.classList.add("hidden");
       if (!hasVoted) setMsg("");
 
-      if (mode === CONFIG.MODES.OPEN) {
-        openBox.classList.remove("hidden");
-        setupOpen();
-        return;
-      }
+      const isLikert = (mode === CONFIG.MODES.LIKERT);
+      const isOpen = (mode === CONFIG.MODES.OPEN);
+      const isWc = (mode === CONFIG.MODES.WORDCLOUD);
 
-      if (mode === CONFIG.MODES.WORDCLOUD) {
-        wcBox.classList.remove("hidden");
-        setupWordcloud();
-        return;
-      }
+      const isMulti =
+        (mode === CONFIG.MODES.MULTI) ||
+        (mode === CONFIG.MODES.SBS) ||
+        (mode === CONFIG.MODES.BNR) ||
+        (mode === CONFIG.MODES.ABC) ||
+        (mode === CONFIG.MODES.YESNO);
 
-      if (mode === CONFIG.MODES.LIKERT) {
-        likertBox.classList.remove("hidden");
-        buildLikertGrid();
-        return;
-      }
+      if (isMulti) { show("multiBox"); return; }
+      if (isLikert) { show("likertBox"); return; }
+      if (isOpen) { show("openBox"); return; }
+      if (isWc) { show("wcBox"); return; }
 
-      // MULTI (inkl presets + opplegg)
-      multiBox.classList.remove("hidden");
-      renderDynamicMulti();
+      waitingBox.classList.remove("hidden");
+      waitingBox.textContent = statusLabel("idle");
+      setAllInputsDisabled(true);
     }
 
-    async function voteDynamic(optId) {
-      if (hasVoted) return;
-      hasVoted = true;
+    function resetUI() {
+      setMsg("");
 
-      try {
-        const path = "counts." + String(optId);
-        await pollRef.set({ [path]: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-        setMsg("Takk! ✅");
-      } catch (e) {
-        hasVoted = false;
-        setMsg("Feil. Prøv igjen.");
-      }
+      rebuildMultiButtons();
+      rebuildLikertButtons();
+      applyOpenConfig();
+      applyWcConfig();
+
+      // respekter gate umiddelbart
+      if (presenterOk()) freezeVotedUI(false);
+      else applyPresenterGate();
     }
 
-    async function voteLikert(v) {
+    // -------------------------
+    // Actions
+    // -------------------------
+    async function voteMulti(optionId) {
+  if (!presenterOk()) { applyPresenterGate(); return; }
+  if (hasVoted) return;
+
+  hasVoted = true;
+  freezeVotedUI(true);
+
+  try {
+    const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+    const fieldPath = `counts.${safeId}`;
+
+    // 1) Riktig måte: update() støtter "field paths"
+    await pollRef.update({
+      [fieldPath]: firebase.firestore.FieldValue.increment(1)
+    });
+
+    setMsg(CONFIG.TEXT.VOTE_OK);
+  } catch (err) {
+    // 2) Fallback hvis doc ikke finnes (update feiler på non-existing doc)
+    try {
+      const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+      await pollRef.set({
+        counts: { [safeId]: 1 }
+      }, { merge: true });
+
+      setMsg(CONFIG.TEXT.VOTE_OK);
+    } catch (err2) {
+      hasVoted = false;
+      freezeVotedUI(false);
+      setMsg(CONFIG.TEXT.TRY_AGAIN);
+    }
+  }
+}
+
+    async function voteLikert(value, btn) {
+      if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
       hasVoted = true;
@@ -362,102 +510,119 @@
 
       try {
         await pollRef.set({
-          likertSum: firebase.firestore.FieldValue.increment(Number(v) || 0),
+          likertSum: firebase.firestore.FieldValue.increment(value),
           likertCount: firebase.firestore.FieldValue.increment(1)
         }, { merge: true });
 
-        setMsg("Takk! ✅");
-      } catch (e) {
+        // marker valgt knapp
+        document.querySelectorAll(".likert-btn").forEach(b => {
+          b.disabled = true;
+          b.classList.add("disabled");
+          if (b === btn) b.classList.add("selected");
+        });
+
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
         hasVoted = false;
         freezeVotedUI(false);
-        setMsg("Feil. Prøv igjen.");
+        document.querySelectorAll(".likert-btn").forEach(b => {
+          b.disabled = false;
+          b.classList.remove("disabled", "selected");
+        });
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
-    async function sendOpen() {
+    async function sendOpenAnswer() {
+      if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
-      const text = (openText.value || "").trim();
-      const q = activeQuestion || {};
-      const maxChars = Number.isFinite(Number(q.openMaxChars)) ? Number(q.openMaxChars) : CONFIG.LIMITS.OPEN_MAX_CHARS;
+      const text = (openText?.value || "").trim();
+      if (!text) { setMsg(CONFIG.TEXT.WRITE_SOMETHING); return; }
 
-      if (!text) return;
+      const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
 
       hasVoted = true;
       freezeVotedUI(true);
 
       try {
-        const rid = roundId || ("round_" + (round ?? 0));
+        const roundId = "round_" + (round ?? 0);
         await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
-          .doc(rid)
+          .doc(roundId)
           .collection("answers")
           .add({
             text: text.slice(0, maxChars),
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        setMsg("Takk! ✅");
-      } catch (e) {
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
         hasVoted = false;
         freezeVotedUI(false);
-        setMsg("Feil. Prøv igjen.");
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
-    async function sendWordcloud() {
+    async function sendWordCloud() {
+      if (!presenterOk()) { applyPresenterGate(); return; }
       if (hasVoted) return;
 
-      const words = Array.from(wcInputs.querySelectorAll("input"))
-        .map(i => (i.value || "").trim())
-        .filter(Boolean);
+      const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
+      const maxChars = Number.isFinite(activeQuestion?.wordcloud?.maxCharsPerWord) ? activeQuestion.wordcloud.maxCharsPerWord : CONFIG.LIMITS.WORD_MAX_CHARS;
 
-      if (!words.length) return;
+      const raw = [wc1?.value, wc2?.value, wc3?.value];
+      const w = raw.map(x => sanitizeWord(x, maxChars)).filter(Boolean).slice(0, maxWords);
+
+      if (!w.length) { setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD); return; }
 
       hasVoted = true;
       freezeVotedUI(true);
 
       try {
-        const rid = roundId || ("round_" + (round ?? 0));
+        const roundId = "round_" + (round ?? 0);
         await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
-          .doc(rid)
+          .doc(roundId)
           .collection("answers")
           .add({
-            words,
+            words: w,
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        setMsg("Takk! ✅");
-      } catch (e) {
+        setMsg(CONFIG.TEXT.VOTE_OK);
+      } catch (err) {
         hasVoted = false;
         freezeVotedUI(false);
-        setMsg("Feil. Prøv igjen.");
+        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
-    function freezeVotedUI(isFrozen) {
-      // behold eksisterende enkel gating
-      const btns = document.querySelectorAll("button, input, textarea");
-      btns.forEach(b => {
-        if (b.id === "openText") return;
-        if (typeof b.disabled === "boolean") b.disabled = !!isFrozen;
+    // -------------------------
+    // misc
+    // -------------------------
+    function hideAll() {
+      ["multiBox","likertBox","openBox","wcBox"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add("hidden");
       });
-
-      if (openText) openText.disabled = !!isFrozen;
+      waitingBox.classList.add("hidden");
     }
 
-    function escapeHtml(s) {
-      return (s || "")
-        .toString()
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+    function show(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove("hidden");
     }
-    function escapeAttr(s) { return escapeHtml(s).replaceAll("\n", " "); }
+
+    function setMsg(text) {
+      msgEl.textContent = text;
+    }
+
+    // init
+    resetUI();
   </script>
 </body>
 </html>
+
+
 
 
 
