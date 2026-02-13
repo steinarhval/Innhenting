@@ -409,28 +409,38 @@
     // Actions
     // -------------------------
     async function voteMulti(optionId) {
-      if (!presenterOk()) { applyPresenterGate(); return; }
-      if (hasVoted) return;
+  if (!presenterOk()) { applyPresenterGate(); return; }
+  if (hasVoted) return;
 
-      hasVoted = true;
-      freezeVotedUI(true);
+  hasVoted = true;
+  freezeVotedUI(true);
 
-      try {
-        const safeId = ProgramUtil.toSafeKey(optionId, "o0");
-        const fieldPath = "counts." + safeId;
+  try {
+    const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+    const fieldPath = `counts.${safeId}`;
 
-        await pollRef.set(
-          { [fieldPath]: firebase.firestore.FieldValue.increment(1) },
-          { merge: true }
-        );
+    // 1) Riktig måte: update() støtter "field paths"
+    await pollRef.update({
+      [fieldPath]: firebase.firestore.FieldValue.increment(1)
+    });
 
-        setMsg(CONFIG.TEXT.VOTE_OK);
-      } catch (err) {
-        hasVoted = false;
-        freezeVotedUI(false);
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
-      }
+    setMsg(CONFIG.TEXT.VOTE_OK);
+  } catch (err) {
+    // 2) Fallback hvis doc ikke finnes (update feiler på non-existing doc)
+    try {
+      const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+      await pollRef.set({
+        counts: { [safeId]: 1 }
+      }, { merge: true });
+
+      setMsg(CONFIG.TEXT.VOTE_OK);
+    } catch (err2) {
+      hasVoted = false;
+      freezeVotedUI(false);
+      setMsg(CONFIG.TEXT.TRY_AGAIN);
     }
+  }
+}
 
     async function voteLikert(value, btn) {
       if (!presenterOk()) { applyPresenterGate(); return; }
@@ -552,3 +562,5 @@
   </script>
 </body>
 </html>
+
+
