@@ -109,6 +109,28 @@
   --yn-yes-bg: var(--ui-primary);
   --yn-no-bg:  var(--ui-danger);
 
+  /* =========================================================
+     WORDCLOUD – kuratert palett (mer variasjon, samme “metthet”)
+     - Unngår de lyseste nordic-tonene
+     - Låner litt fra rosa + “trafikklys”, men harmoniserer alt
+     ========================================================= */
+  --wc-harmonize: var(--preset-nordic-2);
+
+  --wc-1: color-mix(in srgb, var(--preset-nordic-1) 88%, var(--wc-harmonize) 12%);
+  --wc-2: color-mix(in srgb, var(--preset-nordic-2) 92%, #000 8%);
+  --wc-3: color-mix(in srgb, var(--preset-nordic-3) 78%, var(--wc-harmonize) 22%);
+
+  --wc-4: color-mix(in srgb, var(--ui-secondary) 72%, #000 28%);
+  --wc-5: color-mix(in srgb, var(--color-text-muted) 45%, var(--preset-nordic-3) 55%);
+
+  --wc-6: color-mix(in srgb, var(--preset-pink-2) 58%, var(--wc-harmonize) 42%);
+  --wc-7: color-mix(in srgb, var(--preset-pink-1) 52%, var(--wc-harmonize) 48%);
+
+  --wc-8: color-mix(in srgb, var(--sbs-green) 55%, var(--wc-harmonize) 45%);
+  --wc-9: color-mix(in srgb, var(--sbs-orange) 38%, var(--wc-harmonize) 62%);
+
+--wc-10: color-mix(in srgb, var(--red-core) 48%, var(--wc-harmonize) 52%);
+
   /* Nøytrale UI-farger */
   --color-ui-50:  #FAFAFA;
   --color-ui-100: #F2F2F2;
@@ -827,6 +849,7 @@ body.results{
 
   --chart-h: 44vh;
   --list-h:  46vh;
+  --open-list-h: 58vh;
   --cloud-h: 62vh;
 
   --bottom-pad: 20px;
@@ -966,44 +989,98 @@ body.results .likertSub{
   opacity: 0.85;
 }
 
+/* =========================================================
+   OPEN (body.results) – ekte 3-kolonne masonry + bobler
+   ========================================================= */
+
 body.results .openWrap{
   width: 100%;
   max-width: var(--content-max);
-  margin: var(--space-5) auto 0;
+  margin: var(--space-3) auto 0; /* litt nærmere overskrift */
   text-align: left;
 }
 
 body.results .openTitle{
   font-weight: 900;
   font-size: 1.1rem;
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 body.results .openList{
   background: var(--color-surface-soft);
   border-radius: var(--radius-lg);
   padding: var(--space-3);
-  max-height: var(--list-h);
-  min-height: 220px;
+  max-height: var(--open-list-h);
+  min-height: 320px;
   overflow-y: auto;
+
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+body.results .openCol{
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* naturlig vertikal luft */
+}
+
+@media (max-width: 860px){
+  body.results .openList{ gap: 12px; }
+  body.results .openCol{ gap: 10px; }
+}
+@media (max-width: 620px){
+  body.results .openList{ flex-direction: column; }
+  body.results .openCol{ gap: 10px; }
+}
+
+:root{
+  /* Open-bobler: svært lette, men synlige variasjoner */
+  --open-bubble-bg-1: color-mix(in srgb, var(--preset-nordic-5) 55%, var(--color-surface) 45%);
+  --open-bubble-bg-2: color-mix(in srgb, var(--preset-nordic-4) 18%, var(--color-surface) 82%);
+  --open-bubble-bg-3: color-mix(in srgb, var(--ui-neutral) 55%, var(--color-surface) 45%);
+  --open-bubble-border: rgba(0,0,0,0.10);
 }
 
 body.results .openItem{
   background: var(--color-surface);
-  border-radius: var(--radius-md);
-  padding: 0.7rem 0.8rem;
-  margin-bottom: var(--space-3);
+  border: 1px solid var(--open-bubble-border);
+  border-radius: 14px;
+  padding: 12px 14px;
   box-shadow: var(--shadow-2);
   font-size: 1.05rem;
   font-weight: 700;
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
+
+  transition: box-shadow 0.15s ease, transform 0.12s ease, background-color 0.15s ease;
 }
+
+body.results .openItem:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+/* diskret fargevariasjon */
+body.results .openItem[data-variant="1"]{ background: var(--open-bubble-bg-1); }
+body.results .openItem[data-variant="2"]{ background: var(--open-bubble-bg-2); }
+body.results .openItem[data-variant="3"]{ background: var(--open-bubble-bg-3); }
 
 body.results .openEmpty{
   font-weight: 700;
   opacity: 0.75;
+}
+
+/* fade-in kun på nye svar */
+@keyframes openFadeIn{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+body.results .openItem.openItem--new{
+  animation: openFadeIn 240ms ease-out both;
 }
 
 body.results .wcWrap{
@@ -1383,4 +1460,3 @@ body.program-edit details.qAcc:not([open]) .qAccBody{ display:none; }
   justify-content: flex-end;
   flex-wrap: wrap;
 }
-
