@@ -81,10 +81,7 @@
     let round = null;
     let roundId = null;
     let status = "idle";
-
     let hasVoted = false;
-    // PATCH: bind "voted" til roundId, ikke til timing/changed-heuristikk
-    let votedForRoundId = null;
 
     // resync
     let stateUnsub = null;
@@ -206,8 +203,13 @@
     }
 
     function setAllInputsDisabled(disabled) {
+      // multi
       if (multiChoices) multiChoices.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
+
+      // likert
       document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
+
+      // open/wc
       setOpenDisabled(disabled);
       setWcDisabled(disabled);
     }
@@ -259,6 +261,7 @@
         btn.className = "choice";
         btn.textContent = label;
 
+        // farge fra edit (hex eller var(--...))
         if (opt?.color) btn.style.background = opt.color;
 
         btn.addEventListener("click", () => voteMulti(id));
@@ -275,12 +278,14 @@
 
       likertGrid.innerHTML = "";
 
+      // label over
       if (likertScaleLabel) {
         const left = (qLik?.minLabel || String(min)).toString();
         const right = (qLik?.maxLabel || String(max)).toString();
         likertScaleLabel.textContent = `${min} = ${left}   |   ${max} = ${right}`;
       }
 
+      // bygger knapper fra max til min (som før)
       for (let v = max; v >= min; v--) {
         const btn = document.createElement("button");
         btn.className = "likert-btn";
@@ -333,60 +338,55 @@
     function attachStateListener() {
       if (stateUnsub) { try { stateUnsub(); } catch (_) {} stateUnsub = null; }
       stateUnsub = stateRef.onSnapshot(doc => {
-        if (!doc.exists) return;
-        const d = doc.data() || {};
-        lastStateUpdateMs = Date.now();
+      if (!doc.exists) return;
+      const d = doc.data() || {};
+      lastStateUpdateMs = Date.now();
 
-        // status + roundId (bakoverkompat)
-        const newRoundId = d.roundId ?? (Number.isFinite(d.round) ? ("round_" + d.round) : null);
+      const prevStatus = status;
 
-        const rawStatus = (d.status || "").toString();
-        let newStatus;
-        if (rawStatus === "collecting") newStatus = "collect";
-        else if (rawStatus === "collect" || rawStatus === "results" || rawStatus === "paused" || rawStatus === "idle") newStatus = rawStatus;
-        else newStatus = (d.showResults === true ? "results" : ((d.mode ?? null) ? "collect" : "idle"));
+      // status + roundId (bakoverkompat)
+      roundId = d.roundId ?? (Number.isFinite(d.round) ? ("round_" + d.round) : null);
+      const rawStatus = (d.status || "").toString();
+      if (rawStatus === "collecting") status = "collect";
+      else if (rawStatus === "collect" || rawStatus === "results" || rawStatus === "paused" || rawStatus === "idle") status = rawStatus;
+      else status = (d.showResults === true ? "results" : ((d.mode ?? null) ? "collect" : "idle"));
 
-        // hold legacy showResults i sync (for gamle klienter)
-        if ((newStatus === "results") !== (d.showResults === true)) {
-          try { stateRef.set({ showResults: (newStatus === "results") }, { merge: true }); } catch (_) {}
-        }
+      // Mobil skal ikke skrive tilbake showResults/status (read-only state, bortsett fra egne votes).
+      // Presenter (kjor) styrer RESULTS/COLLECT.
 
-        const newMode = d.mode ?? null;
-        const newRound = d.round ?? null;
-        const newQuestion = d.question || null;
 
-        // PATCH: hvis roundId har endret seg, er det alltid ny stemme-runde på mobil
-        if (newRoundId && newRoundId !== roundId) {
-          hasVoted = false;
-          votedForRoundId = null;
-          setMsg("");
-        } else {
-          // ekstra sikkerhet: hvis vi har stemt på en annen runde enn nå, slipp opp
-          if (newRoundId && votedForRoundId && newRoundId !== votedForRoundId) {
-            hasVoted = false;
-            votedForRoundId = null;
-            setMsg("");
-          }
-        }
+      // Når vi går tilbake til COLLECT (samme round), åpne for ny avstemming.
+      if (prevStatus !== "collect" && status === "collect") {
+        hasVoted = false;
+        freezeVotedUI(false);
+      }
 
-        mode = newMode;
-        round = newRound;
-        roundId = newRoundId;
-        status = newStatus;
-        activeQuestion = newQuestion;
+      const newMode = d.mode ?? null;
+      const newRound = d.round ?? null;
 
-        setTitle();
+      // NY
+      const newQuestion = d.question || null;
 
-        // rebuild UI når mode / question endrer seg (trygt, og fortsatt patch-only)
+      const changed = (newMode !== mode || newRound !== round);
+
+      mode = newMode;
+      round = newRound;
+      activeQuestion = newQuestion;
+
+      if (changed) {
+        hasVoted = false;
         resetUI();
+      }
 
-        if (presenterOk()) {
-          render();
-          applyPresenterGate();
-        } else {
-          applyPresenterGate();
-        }
-      });
+      setTitle();
+
+      if (presenterOk()) {
+        render();
+        applyPresenterGate();
+      } else {
+        applyPresenterGate();
+      }
+    });
     }
 
     function forceResync() {
@@ -415,6 +415,7 @@
       hideAll();
       setTitle();
 
+      // Presenter gate først
       if (!presenterOk()) {
         waitingBox.classList.remove("hidden");
         waitingBox.textContent = statusLabel("idle");
@@ -423,14 +424,18 @@
         return;
       }
 
+      // IDLE / PAUSED / RESULTS => ventemodus uten input
       if (!mode || status === "idle" || status === "paused" || status === "results") {
         waitingBox.classList.remove("hidden");
         waitingBox.textContent = statusLabel(status || "idle");
         setAllInputsDisabled(true);
+        if (!hasVoted) setMsg("");
         return;
       }
 
+      // COLLECT => vis riktig input-UI
       waitingBox.classList.add("hidden");
+      if (!hasVoted) setMsg("");
 
       const isLikert = (mode === CONFIG.MODES.LIKERT);
       const isOpen = (mode === CONFIG.MODES.OPEN);
@@ -454,53 +459,54 @@
     }
 
     function resetUI() {
+      setMsg("");
+
       rebuildMultiButtons();
       rebuildLikertButtons();
       applyOpenConfig();
       applyWcConfig();
 
-      if (hasVoted) freezeVotedUI(true);
-      else freezeVotedUI(false);
+      // respekter gate umiddelbart
+      if (presenterOk()) freezeVotedUI(false);
+      else applyPresenterGate();
     }
 
     // -------------------------
     // Actions
     // -------------------------
     async function voteMulti(optionId) {
-      if (!presenterOk()) { applyPresenterGate(); return; }
-      if (hasVoted) return;
+  if (!presenterOk()) { applyPresenterGate(); return; }
+  if (hasVoted) return;
 
-      hasVoted = true;
-      freezeVotedUI(true);
+  hasVoted = true;
+  freezeVotedUI(true);
 
-      try {
-        const safeId = ProgramUtil.toSafeKey(optionId, "o0");
-        const fieldPath = `counts.${safeId}`;
+  try {
+    const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+    const fieldPath = `counts.${safeId}`;
 
-        await pollRef.update({
-          [fieldPath]: firebase.firestore.FieldValue.increment(1)
-        });
+    // 1) Riktig måte: update() støtter "field paths"
+    await pollRef.update({
+      [fieldPath]: firebase.firestore.FieldValue.increment(1)
+    });
 
-        // PATCH: lås denne stemmen til gjeldende roundId
-        votedForRoundId = roundId || ("round_" + (round ?? 0));
+    setMsg(CONFIG.TEXT.VOTE_OK);
+  } catch (err) {
+    // 2) Fallback hvis doc ikke finnes (update feiler på non-existing doc)
+    try {
+      const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+      await pollRef.set({
+        counts: { [safeId]: 1 }
+      }, { merge: true });
 
-        setMsg(CONFIG.TEXT.VOTE_OK);
-      } catch (err) {
-        try {
-          const safeId = ProgramUtil.toSafeKey(optionId, "o0");
-          await pollRef.set({
-            counts: { [safeId]: 1 }
-          }, { merge: true });
-
-          votedForRoundId = roundId || ("round_" + (round ?? 0));
-          setMsg(CONFIG.TEXT.VOTE_OK);
-        } catch (err2) {
-          hasVoted = false;
-          freezeVotedUI(false);
-          setMsg(CONFIG.TEXT.TRY_AGAIN);
-        }
-      }
+      setMsg(CONFIG.TEXT.VOTE_OK);
+    } catch (err2) {
+      hasVoted = false;
+      freezeVotedUI(false);
+      setMsg(CONFIG.TEXT.TRY_AGAIN);
     }
+  }
+}
 
     async function voteLikert(value, btn) {
       if (!presenterOk()) { applyPresenterGate(); return; }
@@ -515,13 +521,13 @@
           likertCount: firebase.firestore.FieldValue.increment(1)
         }, { merge: true });
 
+        // marker valgt knapp
         document.querySelectorAll(".likert-btn").forEach(b => {
           b.disabled = true;
           b.classList.add("disabled");
           if (b === btn) b.classList.add("selected");
         });
 
-        votedForRoundId = roundId || ("round_" + (round ?? 0));
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
@@ -547,16 +553,15 @@
       freezeVotedUI(true);
 
       try {
-        const rid = roundId || ("round_" + (round ?? 0));
+        const roundId = "round_" + (round ?? 0);
         await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
-          .doc(rid)
+          .doc(roundId)
           .collection("answers")
           .add({
             text: text.slice(0, maxChars),
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        votedForRoundId = rid;
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
@@ -581,16 +586,15 @@
       freezeVotedUI(true);
 
       try {
-        const rid = roundId || ("round_" + (round ?? 0));
+        const roundId = "round_" + (round ?? 0);
         await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
-          .doc(rid)
+          .doc(roundId)
           .collection("answers")
           .add({
             words: w,
             ts: firebase.firestore.FieldValue.serverTimestamp()
           });
 
-        votedForRoundId = rid;
         setMsg(CONFIG.TEXT.VOTE_OK);
       } catch (err) {
         hasVoted = false;
@@ -624,11 +628,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
