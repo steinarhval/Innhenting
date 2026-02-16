@@ -80,6 +80,8 @@
     let mode = null;
     let round = null;
     let roundId = null;
+    let questionIndex = null;
+    let pollResetToken = null;
     let status = "idle";
     let hasVoted = false;
 
@@ -344,6 +346,10 @@
 
       const prevStatus = status;
 
+      const prevRoundId = roundId;
+      const prevQuestionIndex = questionIndex;
+      const prevResetToken = pollResetToken;
+
       // status + roundId (bakoverkompat)
       roundId = d.roundId ?? (Number.isFinite(d.round) ? ("round_" + d.round) : null);
       const rawStatus = (d.status || "").toString();
@@ -354,27 +360,37 @@
       // Mobil skal ikke skrive tilbake showResults/status (read-only state, bortsett fra egne votes).
       // Presenter (kjor) styrer RESULTS/COLLECT.
 
-
-      // Når vi går tilbake til COLLECT (samme round), åpne for ny avstemming.
-      if (prevStatus !== "collect" && status === "collect") {
-        hasVoted = false;
-        freezeVotedUI(false);
-      }
-
       const newMode = d.mode ?? null;
       const newRound = d.round ?? null;
 
       // NY
       const newQuestion = d.question || null;
 
+      const newQuestionIndex = Number.isFinite(d.questionIndex) ? d.questionIndex : null;
+      const newResetToken = Number.isFinite(d.pollResetToken) ? d.pollResetToken : null;
+
+      // Re-arm kun på (1) nytt spørsmål/roundId eller (2) eksplisitt reset-token
+      const rearm =
+        (prevRoundId && roundId && prevRoundId !== roundId) ||
+        (prevQuestionIndex !== null && newQuestionIndex !== null && prevQuestionIndex !== newQuestionIndex) ||
+        (prevResetToken !== null && newResetToken !== null && prevResetToken !== newResetToken) ||
+        (!prevRoundId && roundId); // første gyldige round
+
       const changed = (newMode !== mode || newRound !== round);
 
       mode = newMode;
       round = newRound;
       activeQuestion = newQuestion;
+      questionIndex = newQuestionIndex;
+      pollResetToken = newResetToken;
 
       if (changed) {
+        resetUI();
+      }
+
+      if (rearm) {
         hasVoted = false;
+        freezeVotedUI(false);
         resetUI();
       }
 
@@ -628,3 +644,4 @@
   </script>
 </body>
 </html>
+
