@@ -84,6 +84,47 @@
     const db = FirebaseUtil.initFirebaseOnce();
     const { stateRef, pollRef, presenceRef } = FirebaseUtil.getRefs(db);
 
+    // -------------------------
+    // Client identity + votes
+    // -------------------------
+    const CLIENT_ID_KEY = "a_plus_b_clientId";
+    function getOrCreateClientId() {
+      try {
+        const existing = localStorage.getItem(CLIENT_ID_KEY);
+        if (existing && existing.length >= 8) return existing;
+      } catch (_) {}
+
+      let id = null;
+      try {
+        id = (crypto && typeof crypto.randomUUID === "function") ? crypto.randomUUID() : null;
+      } catch (_) {}
+      if (!id) id = "cid_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+
+      try { localStorage.setItem(CLIENT_ID_KEY, id); } catch (_) {}
+      return id;
+    }
+
+    const clientId = getOrCreateClientId();
+    const votesRef = pollRef.collection("votes");
+
+    function voteDocIdFor(rid, cid) {
+      // deterministic, safe for doc-id
+      const a = ProgramUtil.toSafeKey(String(rid || "round_0"), "round_0");
+      const b = ProgramUtil.toSafeKey(String(cid || "cid"), "cid");
+      return a + "__" + b;
+    }
+
+    async function checkHasVotedForRound(rid) {
+      if (!rid) return false;
+      try {
+        const vid = voteDocIdFor(rid, clientId);
+        const snap = await votesRef.doc(vid).get();
+        return !!snap.exists;
+      } catch (_) {
+        return false;
+      }
+    }
+
     let mode = null;
     let round = null;
     let roundId = null;
@@ -98,74 +139,7 @@
     // NY: aktivt spørsmål (kilde til sannhet)
     let activeQuestion = null;
 
-    const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
-
-    // -------------------------
-    // Vote lock (clientId + marker)
-    // -------------------------
-    const CLIENT_ID_KEY = "ab_clientId";
-    const MARKER_SUBCOL = "voteMarkers"; // under pollRef
-
-    function getClientId() {
-      try {
-        const existing = (localStorage.getItem(CLIENT_ID_KEY) || "").trim();
-        if (existing) return existing;
-
-        let id = "";
-        try {
-          if (window.crypto && crypto.getRandomValues) {
-            const a = new Uint8Array(16);
-            crypto.getRandomValues(a);
-            id = Array.from(a).map(b => b.toString(16).padStart(2, "0")).join("");
-          }
-        } catch (_) {}
-
-        if (!id) id = ("c" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2));
-
-        localStorage.setItem(CLIENT_ID_KEY, id);
-        return id;
-      } catch (_) {
-        return ("c" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2));
-      }
-    }
-
-    const clientId = getClientId();
-
-    function voteMarkerRef(rid) {
-      const safeRid = (rid || "").toString();
-      const safeCid = (clientId || "").toString();
-      const docId = safeRid + "__" + safeCid;
-      return pollRef.collection(MARKER_SUBCOL).doc(docId);
-    }
-
-    let markerSyncToken = 0;
-
-    async function syncHasVotedFromMarker(rid) {
-      const myToken = ++markerSyncToken;
-      if (!rid) {
-        hasVoted = false;
-        freezeVotedUI(false);
-        applyPresenterGate();
-        return;
-      }
-
-      try {
-        const snap = await voteMarkerRef(rid).get();
-        if (myToken !== markerSyncToken) return;
-
-        hasVoted = !!snap.exists;
-        freezeVotedUI(!!hasVoted);
-        applyPresenterGate();
-      } catch (_) {
-        // Hvis offline/feil: ikke endre state aggressivt, men behold nåværende hasVoted.
-        freezeVotedUI(!!hasVoted);
-        applyPresenterGate();
-      }
-    }
-
-    // -------------------------
     // DOM refs
-    // -------------------------
     const titleEl = document.getElementById("title");
     const waitingBox = document.getElementById("waitingBox");
     const msgEl = document.getElementById("msg");
@@ -183,6 +157,8 @@
     const wcInputs = Array.from({ length: 10 }, (_, i) => document.getElementById("wc" + (i + 1))).filter(Boolean);
     const wcSendBtn = document.getElementById("wcSendBtn");
     const wcLabel = document.getElementById("wcLabel");
+
+    const STOPWORDS = new Set(CONFIG.STOPWORDS_NO);
 
     // -------------------------
     // Presenter gate (presence)
@@ -273,8 +249,13 @@
     }
 
     function setAllInputsDisabled(disabled) {
+      // multi
       if (multiChoices) multiChoices.querySelectorAll("button.choice").forEach(b => b.disabled = disabled);
+
+      // likert
       document.querySelectorAll(".likert-btn").forEach(b => b.disabled = disabled);
+
+      // open/wc
       setOpenDisabled(disabled);
       setWcDisabled(disabled);
     }
@@ -325,6 +306,8 @@
         const btn = document.createElement("button");
         btn.className = "choice";
         btn.textContent = label;
+
+        // farge fra edit (hex eller var(--...))
         if (opt?.color) btn.style.background = opt.color;
 
         btn.addEventListener("click", () => voteMulti(id));
@@ -341,12 +324,14 @@
 
       likertGrid.innerHTML = "";
 
+      // label over
       if (likertScaleLabel) {
         const left = (qLik?.minLabel || String(min)).toString();
         const right = (qLik?.maxLabel || String(max)).toString();
         likertScaleLabel.textContent = `${min} = ${left}   |   ${max} = ${right}`;
       }
 
+      // bygger knapper fra max til min (som før)
       for (let v = max; v >= min; v--) {
         const btn = document.createElement("button");
         btn.className = "likert-btn";
@@ -379,6 +364,7 @@
 
       if (wcLabel) wcLabel.textContent = `Skriv inntil ${maxWords} ord (maks ${maxChars} tegn per ord)`;
 
+      // Vis/skjul felt etter valgt maxWords (1–10)
       (wcInputs || []).forEach((el, idx) => {
         if (!el) return;
         const n = idx + 1;
@@ -411,13 +397,12 @@
 
     function attachStateListener() {
       if (stateUnsub) { try { stateUnsub(); } catch (_) {} stateUnsub = null; }
-      stateUnsub = stateRef.onSnapshot(doc => {
+      stateUnsub = stateRef.onSnapshot(async (doc) => {
         if (!doc.exists) return;
         const d = doc.data() || {};
         lastStateUpdateMs = Date.now();
 
-        const prevRoundId = roundId;
-
+        // status + roundId (bakoverkompat)
         roundId = d.roundId ?? (Number.isFinite(d.round) ? ("round_" + d.round) : null);
         const rawStatus = (d.status || "").toString();
         if (rawStatus === "collecting") status = "collect";
@@ -426,30 +411,27 @@
 
         const newMode = d.mode ?? null;
         const newRound = d.round ?? null;
+
+        // NY
         const newQuestion = d.question || null;
 
         const changed = (newMode !== mode || newRound !== round);
-        const roundIdChanged = (prevRoundId !== roundId);
 
         mode = newMode;
         round = newRound;
         activeQuestion = newQuestion;
 
         if (changed) {
-          hasVoted = false;
           resetUI();
         }
 
-        if (roundIdChanged) {
-          hasVoted = false;
-          freezeVotedUI(false);
-          setMsg("");
-          // Sjekk marker for ny roundId (åpner automatisk om den ikke finnes)
-          syncHasVotedFromMarker(roundId);
-        } else {
-          // Ved resync/refresh uten roundId-endring: verifiser mot marker
-          syncHasVotedFromMarker(roundId);
-        }
+        // Persistert lock: sjekk marker for gjeldende roundId
+        const voted = await checkHasVotedForRound(roundId);
+        hasVoted = !!voted;
+
+        // Behold “takk”-melding ved re-entry hvis allerede låst
+        if (hasVoted) setMsg(CONFIG.TEXT.VOTE_OK);
+        else setMsg("");
 
         setTitle();
 
@@ -488,6 +470,7 @@
       hideAll();
       setTitle();
 
+      // Presenter gate først
       if (!presenterOk()) {
         waitingBox.classList.remove("hidden");
         waitingBox.textContent = statusLabel("idle");
@@ -496,6 +479,8 @@
         return;
       }
 
+      // IDLE / PAUSED => ventemodus uten input
+      // NB: status === "results" skal IKKE stoppe innsamling på mobil.
       if (!mode || status === "idle" || status === "paused") {
         waitingBox.classList.remove("hidden");
         waitingBox.textContent = statusLabel(status || "idle");
@@ -504,6 +489,7 @@
         return;
       }
 
+      // COLLECT (og evt RESULTS på storskjerm) => vis riktig input-UI
       waitingBox.classList.add("hidden");
       if (!hasVoted) setMsg("");
       freezeVotedUI(!!hasVoted);
@@ -530,8 +516,6 @@
     }
 
     function resetUI() {
-      setMsg("");
-
       rebuildMultiButtons();
       rebuildLikertButtons();
       applyOpenConfig();
@@ -546,77 +530,88 @@
     // -------------------------
     async function voteMulti(optionId) {
       if (!presenterOk()) { applyPresenterGate(); return; }
+      if (!roundId) return;
+
+      // hard stop hvis marker finnes
       if (hasVoted) return;
 
-      hasVoted = true;
       freezeVotedUI(true);
 
-      const safeId = ProgramUtil.toSafeKey(optionId, "o0");
-      const rid = (roundId ?? ("round_" + (round ?? 0)));
-      const fieldPath = `counts.${rid}.${safeId}`;
-      const marker = voteMarkerRef(rid);
-
       try {
-        await db.runTransaction(async (tx) => {
-          const m = await tx.get(marker);
-          if (m.exists) throw new Error("already_voted");
+        const safeId = ProgramUtil.toSafeKey(optionId, "o0");
+        const rid = roundId;
 
-          tx.set(marker, {
+        const vid = voteDocIdFor(rid, clientId);
+        const vref = votesRef.doc(vid);
+
+        await db.runTransaction(async (tx) => {
+          const v = await tx.get(vref);
+          if (v.exists) return;
+
+          const fieldPath = `counts.${rid}.${safeId}`;
+          tx.set(vref, {
             roundId: rid,
             clientId: clientId,
-            mode: (mode || null),
-            ts: firebase.firestore.FieldValue.serverTimestamp(),
-            status: "done"
+            ts: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
 
-          tx.set(pollRef, {
+          tx.set(pollRef, {}, { merge: true });
+          tx.update(pollRef, {
             [fieldPath]: firebase.firestore.FieldValue.increment(1)
-          }, { merge: true });
+          });
         });
 
+        hasVoted = true;
         setMsg(CONFIG.TEXT.VOTE_OK);
+        freezeVotedUI(true);
+
       } catch (err) {
-        if ((err && err.message) === "already_voted") {
-          hasVoted = true;
-          freezeVotedUI(true);
+        // re-check marker: hvis den finnes, lås; ellers åpne
+        const voted = await checkHasVotedForRound(roundId);
+        hasVoted = !!voted;
+        if (hasVoted) {
           setMsg(CONFIG.TEXT.VOTE_OK);
-          return;
+          freezeVotedUI(true);
+        } else {
+          freezeVotedUI(false);
+          setMsg(CONFIG.TEXT.TRY_AGAIN);
         }
-        hasVoted = false;
-        freezeVotedUI(false);
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
     async function voteLikert(value, btn) {
       if (!presenterOk()) { applyPresenterGate(); return; }
+      if (!roundId) return;
       if (hasVoted) return;
 
-      hasVoted = true;
       freezeVotedUI(true);
 
-      const rid = (roundId ?? ("round_" + (round ?? 0)));
-      const marker = voteMarkerRef(rid);
-
       try {
-        await db.runTransaction(async (tx) => {
-          const m = await tx.get(marker);
-          if (m.exists) throw new Error("already_voted");
+        const rid = roundId;
 
-          tx.set(marker, {
+        const vid = voteDocIdFor(rid, clientId);
+        const vref = votesRef.doc(vid);
+
+        await db.runTransaction(async (tx) => {
+          const v = await tx.get(vref);
+          if (v.exists) return;
+
+          tx.set(vref, {
             roundId: rid,
             clientId: clientId,
-            mode: (mode || null),
-            ts: firebase.firestore.FieldValue.serverTimestamp(),
-            status: "done"
+            ts: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
 
-          tx.set(pollRef, {
+          tx.set(pollRef, {}, { merge: true });
+          tx.update(pollRef, {
             [`counts.${rid}.likertSum`]: firebase.firestore.FieldValue.increment(value),
             [`counts.${rid}.likertCount`]: firebase.firestore.FieldValue.increment(1)
-          }, { merge: true });
+          });
         });
 
+        hasVoted = true;
+
+        // marker valgt knapp
         document.querySelectorAll(".likert-btn").forEach(b => {
           b.disabled = true;
           b.classList.add("disabled");
@@ -624,26 +619,34 @@
         });
 
         setMsg(CONFIG.TEXT.VOTE_OK);
-      } catch (err) {
-        if ((err && err.message) === "already_voted") {
-          hasVoted = true;
-          freezeVotedUI(true);
-          setMsg(CONFIG.TEXT.VOTE_OK);
-          return;
-        }
+        freezeVotedUI(true);
 
-        hasVoted = false;
-        freezeVotedUI(false);
-        document.querySelectorAll(".likert-btn").forEach(b => {
-          b.disabled = false;
-          b.classList.remove("disabled", "selected");
-        });
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
+      } catch (err) {
+        const voted = await checkHasVotedForRound(roundId);
+        hasVoted = !!voted;
+
+        if (hasVoted) {
+          setMsg(CONFIG.TEXT.VOTE_OK);
+          document.querySelectorAll(".likert-btn").forEach(b => {
+            b.disabled = true;
+            b.classList.add("disabled");
+          });
+          if (btn) btn.classList.add("selected");
+          freezeVotedUI(true);
+        } else {
+          document.querySelectorAll(".likert-btn").forEach(b => {
+            b.disabled = false;
+            b.classList.remove("disabled", "selected");
+          });
+          freezeVotedUI(false);
+          setMsg(CONFIG.TEXT.TRY_AGAIN);
+        }
       }
     }
 
     async function sendOpenAnswer() {
       if (!presenterOk()) { applyPresenterGate(); return; }
+      if (!roundId) return;
       if (hasVoted) return;
 
       const text = (openText?.value || "").trim();
@@ -651,57 +654,55 @@
 
       const maxChars = Number.isFinite(activeQuestion?.open?.maxChars) ? activeQuestion.open.maxChars : CONFIG.LIMITS.OPEN_MAX_CHARS;
 
-      hasVoted = true;
       freezeVotedUI(true);
 
-      const rid = (roundId ?? ("round_" + (round ?? 0)));
-      const marker = voteMarkerRef(rid);
-
       try {
-        await db.runTransaction(async (tx) => {
-          const m = await tx.get(marker);
-          if (m.exists) throw new Error("already_voted");
+        const rid = roundId;
+        const vid = voteDocIdFor(rid, clientId);
+        const vref = votesRef.doc(vid);
 
-          tx.set(marker, {
+        const ansRef = db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
+          .doc(rid)
+          .collection("answers")
+          .doc(ProgramUtil.toSafeKey(clientId, "cid"));
+
+        await db.runTransaction(async (tx) => {
+          const v = await tx.get(vref);
+          if (v.exists) return;
+
+          tx.set(vref, {
             roundId: rid,
             clientId: clientId,
-            mode: (mode || null),
-            ts: firebase.firestore.FieldValue.serverTimestamp(),
-            status: "pending"
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          tx.set(ansRef, {
+            text: text.slice(0, maxChars),
+            ts: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         });
 
-        await db.collection(CONFIG.FIRESTORE.OPEN_COLLECTION)
-          .doc(rid)
-          .collection("answers")
-          .add({
-            text: text.slice(0, maxChars),
-            ts: firebase.firestore.FieldValue.serverTimestamp()
-          });
-
-        try {
-          await marker.set({ status: "done" }, { merge: true });
-        } catch (_) {}
-
+        hasVoted = true;
         setMsg(CONFIG.TEXT.VOTE_OK);
+        freezeVotedUI(true);
+
       } catch (err) {
-        if ((err && err.message) === "already_voted") {
-          hasVoted = true;
-          freezeVotedUI(true);
+        const voted = await checkHasVotedForRound(roundId);
+        hasVoted = !!voted;
+        if (hasVoted) {
           setMsg(CONFIG.TEXT.VOTE_OK);
-          return;
+          freezeVotedUI(true);
+        } else {
+          hasVoted = false;
+          freezeVotedUI(false);
+          setMsg(CONFIG.TEXT.TRY_AGAIN);
         }
-
-        try { await marker.delete(); } catch (_) {}
-
-        hasVoted = false;
-        freezeVotedUI(false);
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
     async function sendWordCloud() {
       if (!presenterOk()) { applyPresenterGate(); return; }
+      if (!roundId) return;
       if (hasVoted) return;
 
       const maxWords = Number.isFinite(activeQuestion?.wordcloud?.maxWords) ? activeQuestion.wordcloud.maxWords : CONFIG.LIMITS.WORD_MAX_COUNT;
@@ -712,52 +713,49 @@
 
       if (!w.length) { setMsg(CONFIG.TEXT.WRITE_AT_LEAST_ONE_WORD); return; }
 
-      hasVoted = true;
       freezeVotedUI(true);
 
-      const rid = (roundId ?? ("round_" + (round ?? 0)));
-      const marker = voteMarkerRef(rid);
-
       try {
-        await db.runTransaction(async (tx) => {
-          const m = await tx.get(marker);
-          if (m.exists) throw new Error("already_voted");
+        const rid = roundId;
+        const vid = voteDocIdFor(rid, clientId);
+        const vref = votesRef.doc(vid);
 
-          tx.set(marker, {
+        const ansRef = db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
+          .doc(rid)
+          .collection("answers")
+          .doc(ProgramUtil.toSafeKey(clientId, "cid"));
+
+        await db.runTransaction(async (tx) => {
+          const v = await tx.get(vref);
+          if (v.exists) return;
+
+          tx.set(vref, {
             roundId: rid,
             clientId: clientId,
-            mode: (mode || null),
-            ts: firebase.firestore.FieldValue.serverTimestamp(),
-            status: "pending"
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+
+          tx.set(ansRef, {
+            words: w,
+            ts: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true });
         });
 
-        await db.collection(CONFIG.FIRESTORE.WORDCLOUD_COLLECTION)
-          .doc(rid)
-          .collection("answers")
-          .add({
-            words: w,
-            ts: firebase.firestore.FieldValue.serverTimestamp()
-          });
-
-        try {
-          await marker.set({ status: "done" }, { merge: true });
-        } catch (_) {}
-
+        hasVoted = true;
         setMsg(CONFIG.TEXT.VOTE_OK);
+        freezeVotedUI(true);
+
       } catch (err) {
-        if ((err && err.message) === "already_voted") {
-          hasVoted = true;
-          freezeVotedUI(true);
+        const voted = await checkHasVotedForRound(roundId);
+        hasVoted = !!voted;
+        if (hasVoted) {
           setMsg(CONFIG.TEXT.VOTE_OK);
-          return;
+          freezeVotedUI(true);
+        } else {
+          hasVoted = false;
+          freezeVotedUI(false);
+          setMsg(CONFIG.TEXT.TRY_AGAIN);
         }
-
-        try { await marker.delete(); } catch (_) {}
-
-        hasVoted = false;
-        freezeVotedUI(false);
-        setMsg(CONFIG.TEXT.TRY_AGAIN);
       }
     }
 
@@ -783,11 +781,6 @@
 
     // init
     resetUI();
-    // init lock sync (hvis state allerede er lastet senere, vil listener gjøre ny sync)
-    syncHasVotedFromMarker(roundId);
   </script>
 </body>
 </html>
-
-
-
